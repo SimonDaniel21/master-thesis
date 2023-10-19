@@ -1,17 +1,12 @@
-import «Test»
+import «Test».type
+import Test.global_view
+import Test.local_view
 
 inductive DSL 
 | PLUS:DSL->DSL->DSL
 | CONSTANT:Nat->DSL
 | SERVER_VAR
 
-inductive Ty : Type
-  | nat: Ty
-  | fn (a: Ty): Ty -> Ty
-
-@[reducible] def Ty.denote : Ty → Type 
-  |nat    => Nat
-  |fn a b => a.denote -> b.denote
 
 open Ty
 
@@ -21,20 +16,6 @@ open Ty
 -- def addstring: String-> String->String := String.append 
 -- instance aneinander: Add String where 
 --   add := addstring
-
-def channelVarType := String
-def variableType := String
-
-inductive AGENT where
-  | client    : AGENT
-  | server    : AGENT
-
-def AGENT_TO_STRING: AGENT -> String
-  | AGENT.client => "client"
-  | AGENT.server => "server"
-
-instance AGENT_DEBUG: ToString AGENT where 
-  toString := AGENT_TO_STRING
 
 
 inductive EXPRESSION where
@@ -48,55 +29,10 @@ inductive TYPED_EXPRESSION: (List String) -> EXPRESSION -> Ty -> Type
                (typed_e2: TYPED_EXPRESSION GAMMA e2 nat):
                 TYPED_EXPRESSION GAMMA (EXPRESSION.PLUS e1 e2) nat
 
-inductive GLOBAL_PROGRAM where
-  | SEND_RECV    :  channelVarType -> variableType -> AGENT -> AGENT -> GLOBAL_PROGRAM -> GLOBAL_PROGRAM
-  | END     :   GLOBAL_PROGRAM
-  | COMPUTE (v: variableType) (e: EXPRESSION) (a: AGENT) :   GLOBAL_PROGRAM -> GLOBAL_PROGRAM
- 
-def AGENT_EQUALITY (a: AGENT): AGENT -> Bool
-  | AGENT.client => a = AGENT.client
-  | AGENT.server => false
 
-def GLOBAL_PROGRAM_TO_STRING: GLOBAL_PROGRAM -> String
-  | GLOBAL_PROGRAM.SEND_RECV c v sender receiver p => 
-    (AGENT_TO_STRING sender) ++ " --" ++ "> " ++ (AGENT_TO_STRING receiver) ++ "\n" ++ (GLOBAL_PROGRAM_TO_STRING p)
-  | GLOBAL_PROGRAM.END => "END"
-  | GLOBAL_PROGRAM.COMPUTE v e a p => "++--"
 
-instance GLOBAL_PROGRAM_DEBUG: ToString GLOBAL_PROGRAM where 
-  toString := GLOBAL_PROGRAM_TO_STRING
 
-#eval (GLOBAL_PROGRAM.SEND_RECV "channel1" "var1" GLOBAL_PROGRAM.END)
 
-#eval (GLOBAL_PROGRAM.SEND_RECV "channel1" "var1" AGENT.client AGENT.server 
-(GLOBAL_PROGRAM.SEND_RECV "channel2" "var2" AGENT.server AGENT.client 
-GLOBAL_PROGRAM.END))
-
-inductive LOCAL_PROGRAM where
-  | SEND    :  channelVarType -> variableType -> AGENT -> LOCAL_PROGRAM -> LOCAL_PROGRAM
-  | RECV    :  channelVarType -> variableType -> AGENT -> LOCAL_PROGRAM -> LOCAL_PROGRAM
-  | END     :   LOCAL_PROGRAM
-  | COMPUTE (v: variableType) (e: EXPRESSION) :   LOCAL_PROGRAM -> LOCAL_PROGRAM
- 
-
-def LOCAL_PROGRAM_TO_STRING: LOCAL_PROGRAM -> String
-  | LOCAL_PROGRAM.SEND c v receiver p => 
-    "send(" ++ (AGENT_TO_STRING receiver) ++ "\n" ++ (LOCAL_PROGRAM_TO_STRING p)
-  | LOCAL_PROGRAM.RECV c v sender p => 
-    "receive(" ++ (AGENT_TO_STRING sender) ++ "\n" ++ (LOCAL_PROGRAM_TO_STRING p)
-  | LOCAL_PROGRAM.COMPUTE v e p => "++--"
-  | LOCAL_PROGRAM.END => "END"
-  
--- ENDPOINT PROJECTION --
-def GLOBAL_TO_LOCAL (a: AGENT): GLOBAL_PROGRAM -> LOCAL_PROGRAM
-  | (GLOBAL_PROGRAM.SEND_RECV c v sender receiver p) => 
-    if (a == sender) then LOCAL_PROGRAM.SEND c v (GLOBAL_TO_LOCAL a p)
-    else if a == receiver then LOCAL_PROGRAM.RECV c v (GLOBAL_TO_LOCAL a p)
-    else (GLOBAL_TO_LOCAL a p)
-  | GLOBAL_PROGRAM.END => LOCAL_PROGRAM.END
-  | GLOBAL_PROGRAM.COMPUTE v e b p =>
-    if (a == b) then LOCAL_PROGRAM.COMPUTE v e (GLOBAL_TO_LOCAL a p)
-    else (GLOBAL_TO_LOCAL a p)
 
 
 inductive TYPED_GLOBAL_PROGRAM (GAMMA: List variableType) (DELTA: List channelVarType) : GLOBAL_PROGRAM -> Type
