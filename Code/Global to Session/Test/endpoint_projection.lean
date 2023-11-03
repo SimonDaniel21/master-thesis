@@ -3,7 +3,7 @@ import Test.local_view
 import Test.expression
 
 
-def endpoint_projection (a: AGENT): GLOBAL_PROGRAM -> LOCAL_PROGRAM
+def endpoint_projection (a: Agent): GLOBAL_PROGRAM -> LOCAL_PROGRAM
   | (GLOBAL_PROGRAM.SEND_RECV c v sender receiver p) =>
     if (a == sender) then LOCAL_PROGRAM.SEND c v receiver (endpoint_projection a p)
     else if a == receiver then LOCAL_PROGRAM.RECV c v sender (endpoint_projection a p)
@@ -15,7 +15,7 @@ def endpoint_projection (a: AGENT): GLOBAL_PROGRAM -> LOCAL_PROGRAM
     if (a == b) then LOCAL_PROGRAM.COMPUTE v e (endpoint_projection a p)
     else (endpoint_projection a p)
 
-def endpoint_projection_type (a: AGENT): GLOBAL_SESSION_TYPE -> LOCAL_SESSION_TYPE
+def endpoint_projection_type (a: Agent): GLOBAL_SESSION_TYPE -> LOCAL_SESSION_TYPE
   | (GLOBAL_SESSION_TYPE.SEND_RECV c v sender receiver p) =>
     if (a == sender) then LOCAL_SESSION_TYPE.SEND c v receiver (endpoint_projection_type a p)
     else if a == receiver then LOCAL_SESSION_TYPE.RECV c v sender (endpoint_projection_type a p)

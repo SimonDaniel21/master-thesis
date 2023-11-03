@@ -145,16 +145,46 @@
 
 
 \chapter {literature}
+\section{Dictionary}
+
+(clarify the use of Agent, nodes, locations and be consistent throughout the thesis.)
+Literature uses different kinds of naming conventions for talking about communication paricipants, sometimes to express a slightly different intent that share semantically the same properties. I will stick to location throughout my work, in other work you might read terms like nodes, parties, Agents. The paper also presents several extensions (... maybe add whats important)
+
+
 \section{Sessions and Session Types:
 an Overview}
+Session Types take an important role for Choreos and describe the interaction of two (binary) or more (multi party) locations at communication level. We differentiate between \textbf{Global Session Types} that describe the sequence of directed message exchange for a session, and \textbf{Local Session Types}, which reflect the same Protocol but from one locations's perspective. The projection from a global session type to a local ST is called \textbf{End Point Projection} and basicallay translates all sending operations to send operations if location being projected to is sending, or receive operations if is receiving.
+
 \section{HasChor: Functional Choreographic Programming for All
 (Functional Pearl)}
+this paper is about Choreographic programming and an implementation for the Haskell Language. Choreographies are implemented as a Library for use with Haskell and expressed as Computational monads. Might be helpful for own Implementations in Lean to look at their Design Choices for Language Design. Special remarks are on the \textbf{higher order} capabilities, meaning Choreographies can take other Choreos as a parameter as some kind of sub-protocol, as well as \textbf{location polymorphism}. Location polymorphism here means the runtime substitution of locations.
+
+\section{Modular Compilation for Higher-Order Functional
+Choreographies}
+Higher order Choreographies make it non trivial to check which locations are involved in the Choreography. For example if Choreo C depends on Choreo K, the participants of C are only known after K is instantiated. This poses problems for static checks and the EPP. The paper proposes approaches to extend the lambda calcus to achieve a modular applications of an EPP (did not fully understand alot)
+
+\section{On the Monitorability of Session Types, in Theory
+and Practice}
+
+\section{Multiparty Languages: The Choreographic and
+Multitier Cases}
+
+\section{Certified Automatic Repair of Uncompilable Protocols}
+There are Choreos that are not (directly) projectable to local Programs / types. Branching adds the challenges for the session, since continuation of a location protocal might depend on some choice that leads to different executions of two or more sub Protocols. This issue can be fixed by informing other Party members of branching choices that a location might does, called \textbf{knowledge of choice}. The paper also describes more clever ways of propagating choices, since not all choices are relevant to all locations and choices can be transitively propageted for example. The Automated Process is called \textbf{Amendment} or \textbf{repair}.
+
+
 \chapter{Proposal}
-Meine Forschungsfragen:
-Zum Beispiel:
-Was sind Session Types
+Parallel and distributed systems have been established for decades by now and the relevance of communication in the field of programming has steadily increased ever since. While such Software Systems could be written with traditional PL's and paradigms there arises a whole ne set of programming error possibilities. For example deadlocks, or sending unexpected types of data to a receiver.
+To make programming DS more intuively and less error prone there has been high effort in creating specialized languages. those 'new' languages usally follow one of two paradigms.
+a Choreography or a Multiparty view.
 \section{Research Questions}
-Session Types in Lean
+
+\begin{itemize}
+  \item unreliable nodes might be interesing? fault-tolerant and asynchronous systems were not covered by HasChor paper ``and other functional Choreographic languages'' do nothing to adress these difficulties (also mentioned in Modular Compilation for Higher-Order Functional Choreographies).
+  \item how can session times still yield safety guarantees in asynchronous and/or unreliable systems
+  \item make Choreographys without obvious EPP projectable (like in Now it Compiles!). Are there other interesting problems than knowledge of choice?
+  \item might be interesting to look into runtime verification with session types. (havent red alot about this, more in the future work / outlook sections)
+\end{itemize}
 
 \chapter{Über diese Datei}
 Die Datei \file{DEMO-TUDaThesis.tex} ist ein Template für Abschlussarbeiten im Stil des Corporate Designs der TU Darmstadt.

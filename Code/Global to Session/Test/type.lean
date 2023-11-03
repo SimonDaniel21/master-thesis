@@ -1,6 +1,7 @@
 
 @[reducible] def Channel := String
 @[reducible] def Variable := String
+@[reducible] def Function := String
 @[reducible] def Agent := String
 
 inductive Ty : Type
