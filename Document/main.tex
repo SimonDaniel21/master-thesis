@@ -165,9 +165,12 @@ Higher order Choreographies make it non trivial to check which locations are inv
 
 \section{On the Monitorability of Session Types, in Theory
 and Practice}
+about runtime checking and monitoring of communication but very long
 
 \section{Multiparty Languages: The Choreographic and
 Multitier Cases}
+
+this work presents the two programming paradigms Choreographic programming and Multitier. Multitier being programm descriptions that specify the location of operations instead of explicit communication. While both approaches have different roots and went through different development, mainly because both workgroups rarely mix or push collective results, there still is a fundamental linkage between both. This similiaritys could lead both camps to \textbf{cross-fertilisation} that benefits both. This statement is backed by the comparison of two stripped down versions of an Choreo PL and a Multitier one.
 
 \section{Certified Automatic Repair of Uncompilable Protocols}
 There are Choreos that are not (directly) projectable to local Programs / types. Branching adds the challenges for the session, since continuation of a location protocal might depend on some choice that leads to different executions of two or more sub Protocols. This issue can be fixed by informing other Party members of branching choices that a location might does, called \textbf{knowledge of choice}. The paper also describes more clever ways of propagating choices, since not all choices are relevant to all locations and choices can be transitively propageted for example. The Automated Process is called \textbf{Amendment} or \textbf{repair}.
@@ -176,12 +179,15 @@ There are Choreos that are not (directly) projectable to local Programs / types.
 \chapter{Proposal}
 Parallel and distributed systems have been established for decades by now and the relevance of communication in the field of programming has steadily increased ever since. While such Software Systems could be written with traditional PL's and paradigms there arises a whole ne set of programming error possibilities. For example deadlocks, or sending unexpected types of data to a receiver.
 To make programming DS more intuively and less error prone there has been high effort in creating specialized languages. those 'new' languages usally follow one of two paradigms.
-a Choreography or a Multiparty view.
+a Choreography or a Multiparty view. A Choreography tries to describes the communication from some kind of global view like a play or a dance with a construct of a directed send that specifies both sender and receiver. Multiier programming on the other hand lets the programmer shift the location of computation in code and thus masking the required communication. Still it has been shown that both approaches share strong similiaritys (Multiparty Languages: The Choreographic and
+Multitier Cases).
+Session Types, first introduced 1998 (i guess earlier?) and standardized by W3C in 2002, are an handy tool that has been used to statically check multiparty programs. They describe the communication layout of two or more partys and can already make strong safety guarantees by cheap static analysis. There has been many new research regarding session Types since (2015 i guess nochmal nachsehen) that focused on extending session types and their expressiveness, \par but only a few cover session types in asychronous and unreliable environments. Fault tolrence in under these circumstances can be important, so i will investigate on the special challenges that arise here. Accompanying i implement a simple Choreography Model with session type projection in Lean4 that demonstrates some of my points
+
 \section{Research Questions}
 
 \begin{itemize}
   \item unreliable nodes might be interesing? fault-tolerant and asynchronous systems were not covered by HasChor paper ``and other functional Choreographic languages'' do nothing to adress these difficulties (also mentioned in Modular Compilation for Higher-Order Functional Choreographies).
-  \item how can session times still yield safety guarantees in asynchronous and/or unreliable systems
+  \item how can session times still yield safety guarantees in asynchronous and/or unreliable systems (Multiparty Asynchronous Session Types Honda.)
   \item make Choreographys without obvious EPP projectable (like in Now it Compiles!). Are there other interesting problems than knowledge of choice?
   \item might be interesting to look into runtime verification with session types. (havent red alot about this, more in the future work / outlook sections)
 \end{itemize}
