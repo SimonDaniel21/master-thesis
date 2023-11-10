@@ -67,8 +67,6 @@ def environment := (List (Variable × Nat)) ×  (List (Function × (Nat -> Nat))
 
 def test_list: List (String × String) := [("a", "eins"),  ("b", "zwei")]
 
-#eval test_list
-
 
 #check environment
 
@@ -78,6 +76,7 @@ def test_v : test_type := (2,3)
 
 def var_map (env: environment): (List (Variable × Nat)) :=
   env.fst
+
 def funcs (env: environment): (List (Function × (Nat -> Nat))) :=
   env.snd
 

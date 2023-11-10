@@ -27,7 +27,6 @@ def test_global_program: GLOBAL_PROGRAM := (GLOBAL_PROGRAM.SEND_RECV "channel1" 
 (GLOBAL_PROGRAM.COMPUTE "var3" (EXPRESSION.PLUS (EXPRESSION.CONSTANT 2) (EXPRESSION.CONSTANT 4)) AGENT.server (GLOBAL_PROGRAM.END (Option.some (EXPRESSION.VAR "var3"))))))
 
 
-
 def client_local_program: LOCAL_PROGRAM := endpoint_projection AGENT.client test_global_program
 def server_local_program: LOCAL_PROGRAM := endpoint_projection AGENT.server test_global_program
 
