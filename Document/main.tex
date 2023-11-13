@@ -48,6 +48,10 @@
 ]{tudapub}
 
 
+% MEINE PACKETE
+\usepackage{syntax}
+
+
 % Der folgende Block ist nur bei pdfTeX auf Versionen vor April 2018 notwendig
 \usepackage{iftex}
 \ifPDFTeX
@@ -150,6 +154,34 @@
 (clarify the use of Agent, nodes, locations and be consistent throughout the thesis.)
 Literature uses different kinds of naming conventions for talking about communication paricipants, sometimes to express a slightly different intent that share semantically the same properties. I will stick to location throughout my work, in other work you might read terms like nodes, parties, Agents. The paper also presents several extensions (... maybe add whats important)
 
+\subsection{deadlocks}
+A deadlock occurs when a computer prgoram ist not able to progress any further. This is usally considered as undesired behaviour, even if the program was not able to finish its task successfully there still remain unused processes on the CPU that might not be able to release aquired resources any more to the System. On large scale Distributed Systems this can lead to potentially large expenses for the hardware operator. An Textbook example would be set up by 2 Processes both performing a blocking send operation other the network but never being able to reach the complementary receive.
+\subsection{Choreography}
+A Choreography is program specification with first party support for distributed computation. Usual imperative or functional PLs target a single CPU by default to run on, meaning the compiler will only output a single executable prgoram file. Approaches to Multiparty programming might be to branch inside the Programm depending on the executing Node/location ID or write different programs from the ground up.
+By using a common choreographic specification, however, programmers gain a few crucial benefits. The System behaviour can be written in one common place, the intent of and order of communication can be expressed more intuively and it can be easier to argue about safety guarantees as we see later on.
+
+\subsection{higher order Choreography}
+Higher order Choreos are Choreos that can take other Choreos as an Argument. This can be very handy and be thought of subprotocols. An example would be a Choreo where you act as a buyer that wants to buy books from a seller. Additionaly you have a friend and are negotiating with him how much money he wants to lend you. The negotiation choreo between you and your friend can now be taken as an argument for the book buying Choreo. The benefit is that details of the negotiation arent neccessary anymore in a static context, but can be supplied at runtime!
+
+(wenn ich es habe kann ich hier ja mein Beispiel rein bringen)
+
+
+\subsection{Knowledge of Choice}
+
+Whenever a party inside a Choreography branches on some kind of runtime condition other parties might have to be informed of that branching choice. this does not allways have to be the case, but only if a second party's communication pattern depends on the branch decision it has to aquire the 'Knowledge of Choice' through a notification of some kind.
+
+\subsection{Session Types}
+or Program Types describe the communication patterns and can be thought of as protocols. In my Paper I differntiate between global and local (session) Types. By Global i mean the global view over \emph{all} locations and local being the view of a single actor/location. The Global Type describes the protocol of the Multiparty program, always specifiing sender and receiver for communication operations. In contrast a local type only cares about one side, as for send operations the sender is implicetely set to the location of the local type and vice versa for receiving. In a Multi Party prgoram with more than 2 participants, a local type may ignore all communication between locations that does not include itself.
+
+globalType ->
+\newline | a -> b: dataType. globalType
+\newline | end
+
+dataType ->
+string
+\newline | number
+\newline | globalType
+
 
 \section{Sessions and Session Types:
 an Overview}
@@ -183,14 +215,56 @@ a Choreography or a Multiparty view. A Choreography tries to describes the commu
 Multitier Cases).
 Session Types, first introduced 1998 (i guess earlier?) and standardized by W3C in 2002, are an handy tool that has been used to statically check multiparty programs. They describe the communication layout of two or more partys and can already make strong safety guarantees by cheap static analysis. There has been many new research regarding session Types since (2015 i guess nochmal nachsehen) that focused on extending session types and their expressiveness, \par but only a few cover session types in asychronous and unreliable environments. Fault tolrence in under these circumstances can be important, so i will investigate on the special challenges that arise here. Accompanying i implement a simple Choreography Model with session type projection in Lean4 that demonstrates some of my points
 
-\section{Research Questions}
+\section{research Questions}
 
+Can a Choreographic Language be implemented in Lean4 in a similiar way to Haskell/HasChor? To Answer this Question i implement a DSL describing choreographic Programs in Lean.
+\begin{itemize}
+  \item Implement Knowledge of Choice mechanism
+  \item Implement EPP Projection for Choreographic programs
+  \item Implement 4 projection functions (Skizze)
+  \item find a suitable computation model for choreos
+  \item is the Type of a end point projected program \emph{always} equivalent to the end point projected type of the program?
+\end{itemize}
+
+
+Implement
+
+\subsection{challenges}
+\begin{itemize}
+  \item what changes when communication is unreliable (or just asychronous)? adapt my model in Lean accordingly to include failure
+  \item how to verify Choreographys supplied at runtime? im not quite sure if this is even neccessary after EPP
+\end{itemize}
+\subsection{notes}
 \begin{itemize}
   \item unreliable nodes might be interesing? fault-tolerant and asynchronous systems were not covered by HasChor paper ``and other functional Choreographic languages'' do nothing to adress these difficulties (also mentioned in Modular Compilation for Higher-Order Functional Choreographies).
   \item how can session times still yield safety guarantees in asynchronous and/or unreliable systems (Multiparty Asynchronous Session Types Honda.)
   \item make Choreographys without obvious EPP projectable (like in Now it Compiles!). Are there other interesting problems than knowledge of choice?
   \item might be interesting to look into runtime verification with session types. (havent red alot about this, more in the future work / outlook sections)
 \end{itemize}
+
+\chapter{Prgram Syntax}
+
+Choreo (Multiparty Program) P -> if E then P else P endif P
+\newline| send_receive 		:v@l <= v@l2
+\newline| compute      		: v@l <= E@l
+\newline| choreo 			: v@l <= CHOREO with mapping P END_CHOREO P
+\newline| end 				: v@l
+
+Expression E -> Variable: v
+\newline| CONSTANT : c
+\newline| PLUS     : (E+E)
+\newline| DIVIDE   : (E/E)
+\newline| Function -> f(E)
+
+v sind Variablennamen (Strings) und l Location Namen (Strings)
+
+\begin{grammar}
+<Choreo> ::= <ident> ‘=’ <expr>
+\alt ‘for’ <ident> ‘=’ <expr> ‘to’ <expr> ‘do’ <statement>
+\alt ‘{’ <stat-list> ‘}’
+\alt <empty>
+<stat-list> ::= <statement> ‘;’ <stat-list> | <statement>
+\end{grammar}
 
 \chapter{Über diese Datei}
 Die Datei \file{DEMO-TUDaThesis.tex} ist ein Template für Abschlussarbeiten im Stil des Corporate Designs der TU Darmstadt.
