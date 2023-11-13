@@ -7,28 +7,41 @@ inductive GLOBAL_PROGRAM where
   | SEND_RECV    : Variable -> Agent -> Agent -> GLOBAL_PROGRAM -> GLOBAL_PROGRAM
   | END     :  Agent -> EXPRESSION -> GLOBAL_PROGRAM
   | COMPUTE (v: Variable) (e: EXPRESSION) (a: Agent) :   GLOBAL_PROGRAM -> GLOBAL_PROGRAM
+  | CHOREO (a: Agent) (v: Variable) (chor: GLOBAL_PROGRAM) (location_map: List (Agent × Agent)): GLOBAL_PROGRAM -> GLOBAL_PROGRAM
 
 inductive GLOBAL_SESSION_TYPE where
   | SEND_RECV    :  Variable -> Agent -> Agent -> GLOBAL_SESSION_TYPE -> GLOBAL_SESSION_TYPE
   | END     :   GLOBAL_SESSION_TYPE
 
+open GLOBAL_PROGRAM
 
 def GLOBAL_TO_TYPE: GLOBAL_PROGRAM -> GLOBAL_SESSION_TYPE
-  | GLOBAL_PROGRAM.IF a name e opt_a opt_b p => GLOBAL_SESSION_TYPE.END
-  | GLOBAL_PROGRAM.SEND_RECV v a b p => GLOBAL_SESSION_TYPE.SEND_RECV v a b (GLOBAL_TO_TYPE p)
-  | GLOBAL_PROGRAM.COMPUTE _ _ _ p => (GLOBAL_TO_TYPE p)
-  | GLOBAL_PROGRAM.END _ _ => GLOBAL_SESSION_TYPE.END
+  | IF a name e opt_a opt_b p => GLOBAL_SESSION_TYPE.END
+  | SEND_RECV v a b p => GLOBAL_SESSION_TYPE.SEND_RECV v a b (GLOBAL_TO_TYPE p)
+  | COMPUTE _ _ _ p => (GLOBAL_TO_TYPE p)
+  | END _ _ => GLOBAL_SESSION_TYPE.END
+  | CHOREO _ _ _ _ _ => GLOBAL_SESSION_TYPE.END
 
-def GLOBAL_PROGRAM_TO_STRING: GLOBAL_PROGRAM -> String
-  | GLOBAL_PROGRAM.IF a name e opt_a opt_b p => name ++ "@" ++ a ++ " <= if " ++ toString e ++ "\n" ++ GLOBAL_PROGRAM_TO_STRING opt_a ++ "\nelse\n" ++ GLOBAL_PROGRAM_TO_STRING opt_b ++ "\nend if\n" ++ GLOBAL_PROGRAM_TO_STRING p
-  | GLOBAL_PROGRAM.SEND_RECV v sender receiver p =>
-    v ++ "@" ++ receiver ++ " <= " ++ v ++  "@" ++ sender ++ "\n" ++ (GLOBAL_PROGRAM_TO_STRING p)
-  | GLOBAL_PROGRAM.END a result => "RETURN " ++ toString result ++ "@" ++ a
+def repeat_string (s: String) (n: Nat): String :=
+  if n > 0 then
+    repeat_string s (n -1) ++ s
+  else
+    ""
 
-  | GLOBAL_PROGRAM.COMPUTE v e a p => v ++  "@" ++ a ++ " <= " ++ (EXPRESSION_TO_STRING e) ++ " @" ++ a ++ "\n" ++ (GLOBAL_PROGRAM_TO_STRING p)
+-- i for indents
+def GLOBAL_PROGRAM_TO_STRING (i: Nat) (p: GLOBAL_PROGRAM):  String :=
+  let leading_spaces := repeat_string "  " i
+  let content: String := match p with
+  | IF a name e opt_a opt_b p => name ++ "@" ++ a ++ " <= if " ++ toString e ++ "\n" ++ GLOBAL_PROGRAM_TO_STRING  (i + 1) opt_a ++ "\nelse\n" ++ GLOBAL_PROGRAM_TO_STRING (i + 1) opt_b ++ "\nend if\n" ++ GLOBAL_PROGRAM_TO_STRING i p
+  | SEND_RECV v sender receiver p =>
+    v ++ "@" ++ receiver ++ " <= " ++ v ++  "@" ++ sender ++ "\n" ++ (GLOBAL_PROGRAM_TO_STRING i p)
+  | END a result => toString result ++ "@" ++ a
+  | GLOBAL_PROGRAM.COMPUTE v e a p => v ++  "@" ++ a ++ " <= " ++ (EXPRESSION_TO_STRING e) ++ " @" ++ a ++ "\n" ++ (GLOBAL_PROGRAM_TO_STRING i p)
+  | CHOREO a v chor location_map p => v ++ "@" ++ a ++  " <= CHOREO with " ++ toString location_map ++ "\n" ++ GLOBAL_PROGRAM_TO_STRING (i+1) chor ++ "\nEND_CHOREO\n" ++  GLOBAL_PROGRAM_TO_STRING i p
+  leading_spaces ++ content
 
 instance: ToString GLOBAL_PROGRAM where
-  toString := GLOBAL_PROGRAM_TO_STRING
+  toString := (GLOBAL_PROGRAM_TO_STRING 0)
 
 def GLOBAL_TYPE_TO_STRING: GLOBAL_SESSION_TYPE -> String
   | GLOBAL_SESSION_TYPE.SEND_RECV v sender receiver p =>
@@ -42,10 +55,9 @@ open Lean
 
 def global_environment := HashMap Agent environment
 
-def temp (a: Agent) () :=
 
 instance: ToString global_environment where
-  toString (env: global_environment) := toString (env.toList.map environment_to_string intersperse "\n")
+  toString (env: global_environment) := toString (env.toList.map (fun x => x.fst ++ "\n" ++ toString x.snd ++ "\n\n"))
 
 
 instance: ToString GLOBAL_SESSION_TYPE where
@@ -71,9 +83,6 @@ instance: ToString (global_evaluation_result Nat) where
 
 def global_evaluation (x: Type) := global_environment -> global_evaluation_result x
 
-#eval (state)
-
-def a: Writer
 def bind_global_eval:  global_evaluation α → (α → global_evaluation β) → global_evaluation β
   | gl_eval, func, state =>
     let result := gl_eval state
@@ -97,6 +106,8 @@ def add  (b: Nat) (a: Nat := 2): Nat :=
 def test_g_env: global_environment := HashMap.empty
 
 
+def test_map (pair: (Agent × environment)) (location_map: List (Agent × Agent)) : (Agent × environment) :=
+
 
 def pure_global_eval {α : Type} (elem: α): global_evaluation α :=
   fun a => global_evaluation_result.state a [] elem
@@ -106,7 +117,7 @@ instance: Monad global_evaluation where
   pure := pure_global_eval
 
 def eval_global: GLOBAL_PROGRAM -> global_evaluation Nat
-  | GLOBAL_PROGRAM.IF a v e opt_a opt_b p, state =>
+  | IF a v e opt_a opt_b p, state =>
     let local_state_opt := state.find? a
 
     match local_state_opt with
@@ -129,7 +140,7 @@ def eval_global: GLOBAL_PROGRAM -> global_evaluation Nat
 
 
 --BUG alsways Unknown agent a, never b :(
-  | GLOBAL_PROGRAM.SEND_RECV v a b p, state =>
+  | SEND_RECV v a b p, state =>
     let eval_result_opt :=
       do
       let sender_state <- state.find? a
@@ -150,7 +161,7 @@ def eval_global: GLOBAL_PROGRAM -> global_evaluation Nat
 
 
 
-  | GLOBAL_PROGRAM.COMPUTE v e a p, state =>
+  | COMPUTE v e a p, state =>
     let local_state_opt := state.find? a
     match local_state_opt with
     | Option.some local_state =>
@@ -164,7 +175,7 @@ def eval_global: GLOBAL_PROGRAM -> global_evaluation Nat
 
     | Option.none => global_evaluation_result.unknown_agent a [state]
 
-  | GLOBAL_PROGRAM.END a e, state =>
+  | END a e, state =>
     let local_state_opt := state.find? a
     match local_state_opt with
     | Option.some local_state =>
@@ -175,16 +186,37 @@ def eval_global: GLOBAL_PROGRAM -> global_evaluation Nat
       | x =>  global_evaluation_result.expression_error x [state]
     | Option.none => global_evaluation_result.unknown_agent a [state]
 
+  | CHOREO a v choreo location_map p, state =>
+    let local_state_opt := state.find? a
+    match local_state_opt with
+    | Option.some local_state =>
+      let inner_state :=
+        HashMap.ofList (state.toList.map (fun x =>
+          match location_map.lookup x.fst with
+          | Option.some other => (other, x.snd)
+          | Option.none => x ))
+      let res: global_evaluation_result Nat := eval_global choreo inner_state
+
+      match res with
+      | global_evaluation_result.state env logs value =>
+        let new_var_map: List (Variable × Nat) := (var_map local_state).concat (v, value)
+        let new_state: global_environment := (state.insert a (new_var_map, (funcs local_state)))
+        eval_global p new_state
+      | x => x
+
+
+    | Option.none => global_evaluation_result.unknown_agent a [state]
+
+
 
 def price_of (x: Nat): Nat := x + 100
+def deliveryDate : Nat -> Nat := fun _ => 42
+def calculate_share (x: Nat): Nat := x / 2
 
-def l_test_env1: environment := ([("title", 0),("budget", 42)],[])
-def l_test_env2: environment := ([],[("price_of", price_of)])
+def l_test_env1_buyer: environment := ([("title", 0),("budget", 51)],[])
+def l_test_env1_seller: environment := ([],[("price_of", price_of), ("deliveryDate", deliveryDate)])
 
-def g_test_env : global_environment := HashMap.ofList [("buyer", l_test_env1), ("seller", l_test_env2)]
-
-
-
+def g_test_env : global_environment := HashMap.ofList [("buyer", l_test_env1_buyer), ("seller", l_test_env1_seller)]
 
 
 
@@ -196,31 +228,48 @@ def test_program_2: GLOBAL_PROGRAM := GLOBAL_PROGRAM.SEND_RECV "var1" "client" "
   (GLOBAL_PROGRAM.COMPUTE "var3" (EXPRESSION.DIVIDE (EXPRESSION.CONSTANT 2) (EXPRESSION.CONSTANT 0)) "server" (GLOBAL_PROGRAM.END "server" (EXPRESSION.VAR "var3"))))
 
 
-def trade_accept : GLOBAL_PROGRAM := (GLOBAL_PROGRAM.COMPUTE "decision" (EXPRESSION.CONSTANT 1) "buyer"
-  (GLOBAL_PROGRAM.SEND_RECV "decision" "buyer" "seller" (GLOBAL_PROGRAM.END "buyer" (EXPRESSION.CONSTANT 1))))
+def trade_accept : GLOBAL_PROGRAM := (GLOBAL_PROGRAM.END "seller"  (EXPRESSION.FUNC  "deliveryDate" (EXPRESSION.VAR "title")))
 
-def trade_decline : GLOBAL_PROGRAM := (GLOBAL_PROGRAM.COMPUTE "decision" (EXPRESSION.CONSTANT 0) "buyer"
-  (GLOBAL_PROGRAM.SEND_RECV "decision" "buyer" "seller" (GLOBAL_PROGRAM.END "buyer" (EXPRESSION.CONSTANT 0))))
+def trade_decline : GLOBAL_PROGRAM :=  (GLOBAL_PROGRAM.END "buyer" (EXPRESSION.CONSTANT 0))
 
 
 def buyer_seller: GLOBAL_PROGRAM := GLOBAL_PROGRAM.SEND_RECV "title" "buyer" "seller"
   (GLOBAL_PROGRAM.COMPUTE "price" (EXPRESSION.FUNC "price_of" (EXPRESSION.VAR "title")) "seller"
   (GLOBAL_PROGRAM.SEND_RECV "price" "seller" "buyer"
-  (GLOBAL_PROGRAM.IF "buyer" "decision" (EXPRESSION.SMALLER (EXPRESSION.VAR "price") (EXPRESSION.CONSTANT 300)) trade_accept trade_decline
-  (GLOBAL_PROGRAM.END "buyer" (EXPRESSION.VAR "decision")))))
+  (GLOBAL_PROGRAM.IF "buyer" "result" (EXPRESSION.SMALLER (EXPRESSION.VAR "price") (EXPRESSION.VAR "budget")) trade_accept trade_decline
+  (GLOBAL_PROGRAM.END "buyer" (EXPRESSION.VAR "result")))))
 
-def buyer_seller2: GLOBAL_PROGRAM := GLOBAL_PROGRAM.SEND_RECV "title" "buyer" "seller" (GLOBAL_PROGRAM.END "buyer" (EXPRESSION.VAR "title"))
 
 #eval g_test_env
 #eval (buyer_seller)
 #eval (eval_global buyer_seller g_test_env)
 
 
-#eval (buyer_seller2)
-#eval (eval_global buyer_seller2 g_test_env)
 
-#eval (test_program_1)
+def two_buyer_ask_for_money: GLOBAL_PROGRAM := GLOBAL_PROGRAM.SEND_RECV "price" "borrower" "friend"
+  (GLOBAL_PROGRAM.COMPUTE "share" (EXPRESSION.FUNC "calculate_share" (EXPRESSION.VAR "price")) "friend"
+  (GLOBAL_PROGRAM.SEND_RECV "share" "friend" "borrower"
+  (GLOBAL_PROGRAM.END "borrower" (EXPRESSION.VAR "share"))))
 
-#eval (test_program_2)
-#eval (eval_global test_program_2 HashMap.empty)
-#eval (GLOBAL_TO_TYPE test_program_2)
+
+def two_buyer_protocol: GLOBAL_PROGRAM := GLOBAL_PROGRAM.SEND_RECV "title" "buyer" "seller"
+  (GLOBAL_PROGRAM.COMPUTE "price" (EXPRESSION.FUNC "price_of" (EXPRESSION.VAR "title")) "seller"
+  (GLOBAL_PROGRAM.SEND_RECV "price" "seller" "buyer"
+  (GLOBAL_PROGRAM.CHOREO "buyer" "friends_share" two_buyer_ask_for_money [ ("guy","friend"), ("buyer", "borrower")]
+  (GLOBAL_PROGRAM.IF "buyer" "result" (EXPRESSION.SMALLER (EXPRESSION.VAR "price") (EXPRESSION.PLUS (EXPRESSION.VAR "budget") (EXPRESSION.VAR "friends_share"))) trade_accept trade_decline
+  (GLOBAL_PROGRAM.END "buyer" (EXPRESSION.VAR "result"))))))
+
+
+
+def l_test_env2_buyer: environment := ([("price", 100),("budget", 49), ("title", 2)],[])
+def l_test_env2_friend: environment := ([],[("calculate_share", calculate_share), ("deliveryDate", deliveryDate)])
+def g_test_env2 : global_environment := HashMap.ofList [("borrower", l_test_env2_buyer), ("friend", l_test_env2_friend)]
+
+def g_test_env3 : global_environment := HashMap.ofList [("buyer", l_test_env1_buyer), ("guy", l_test_env2_friend), ("seller", l_test_env1_seller)]
+
+
+#eval (two_buyer_ask_for_money)
+#eval (two_buyer_protocol)
+
+#eval (eval_global two_buyer_ask_for_money g_test_env2)
+#eval (eval_global two_buyer_protocol g_test_env3)
