@@ -71,12 +71,15 @@ instance: ToString GLOBAL_SESSION_TYPE where
 structure program_state where
   var: Nat
 
-structure with_logs (t: Type) where
+structure with_logs (l: Type) (t: Type) where
   value: t
-  logs: List String
+  logs: List l
 
-instance: ToString (with_logs Nat) where
+instance: ToString (with_logs String Nat) where
   toString := fun v_with_logs => "value => " ++ toString v_with_logs.value ++ "\nLogs =>¬" ++ toString v_with_logs.logs
+
+def append (s: List String): with_logs String PUnit :=
+  {value:= (), logs:= s}
 
 
 def my_add2(v: Nat) : with_logs Nat :=
@@ -117,8 +120,8 @@ instance: ToString evaluation_error where
   | evaluation_error.unknown_agent a => "unknown agent " ++ a ++ " introduced"
   | evaluation_error.expression_error e => "Expression Error:\n" ++ toString e
   | evaluation_error.unknown_message_var v => "unknown message Variable: " ++ v
-
-abbrev global_evaluation_result := ExceptT evaluation_error (StateM global_environment) Nat
+trans(trans(trans)) Nat
+abbrev global_evaluation_result := ExceptT evaluation_error (StateT global_environment with_logs) Nat
 
 inductive global_evaluation_result_old (x: Type) where
   | state (env: global_environment) (logs: List global_environment) (result: x): global_evaluation_result_old x
@@ -126,7 +129,13 @@ inductive global_evaluation_result_old (x: Type) where
   | expression_error (e: EXPRESSION_RESULT Nat) (logs: List global_environment): global_evaluation_result_old x
   | unknown_message_var (name: Variable) (logs: List global_environment): global_evaluation_result_old x
 
-def myStateM := StateM Nat Nat
+abbrev myStateM := StateM Nat Nat
+
+def zuString (m: myStateM) : String :=
+
+  match m with
+  | _ => "" 4
+
 #check myStateM
 
 
@@ -153,6 +162,7 @@ open GLOBAL_PROGRAM
 def eval_global: GLOBAL_PROGRAM -> global_evaluation_result
   | SEND_RECV v a b p =>
     do
+    <-append ["mylog"]
     let state <- get
     let sender_state_opt := state.find? a
     let receiver_state_opt := state.find? b
@@ -250,7 +260,7 @@ def buyer_seller2: GLOBAL_PROGRAM := GLOBAL_PROGRAM.SEND_RECV "title" "buyer" "s
 
 
 #eval (buyer_seller2)
-#eval (eval_global buyer_seller2 g_test_env)
+#check (eval_global buyer_seller2 g_test_env)
 
 #eval (test_program_1)
 
