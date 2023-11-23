@@ -1,67 +1,68 @@
 import Test.type
 
-inductive EXPRESSION where
-  | VAR (v: Variable) :EXPRESSION
-  | FUNC (f: Function) : EXPRESSION -> EXPRESSION
-  | CONSTANT (n: Nat) :EXPRESSION
-  | DIVIDE: EXPRESSION -> EXPRESSION -> EXPRESSION
-  | MULTIPLY: EXPRESSION -> EXPRESSION -> EXPRESSION
-  | PLUS: EXPRESSION -> EXPRESSION -> EXPRESSION
-  | MINUS: EXPRESSION -> EXPRESSION -> EXPRESSION
-  | SMALLER: EXPRESSION -> EXPRESSION -> EXPRESSION
-  | EQUALS: EXPRESSION -> EXPRESSION -> EXPRESSION
+inductive Exp where
+  | VAR (v: Variable) :Exp
+  | FUNC (f: Function) : Exp -> Exp
+  | CONSTANT (n: Nat) :Exp
+  | DIVIDE: Exp -> Exp -> Exp
+  | MULTIPLY: Exp -> Exp -> Exp
+  | PLUS: Exp -> Exp -> Exp
+  | MINUS: Exp -> Exp -> Exp
+  | SMALLER: Exp -> Exp -> Exp
+  | EQUALS: Exp -> Exp -> Exp
 deriving BEq
 
+open Exp
 
-def EXPRESSION_TO_STRING: EXPRESSION -> String
-  | EXPRESSION.FUNC f e => f ++ "(" ++ EXPRESSION_TO_STRING e ++ ")"
-  | EXPRESSION.VAR n => n
-  | EXPRESSION.CONSTANT n => s!"{n}"
-  | EXPRESSION.DIVIDE a b => "(" ++ (EXPRESSION_TO_STRING a) ++ " / " ++ (EXPRESSION_TO_STRING b) ++ ")"
-  | EXPRESSION.MULTIPLY a b => "(" ++ (EXPRESSION_TO_STRING a) ++ " x " ++ (EXPRESSION_TO_STRING b) ++ ")"
-  | EXPRESSION.PLUS a b => "(" ++ (EXPRESSION_TO_STRING a) ++ " + " ++ (EXPRESSION_TO_STRING b) ++ ")"
-  | EXPRESSION.MINUS a b => "(" ++ (EXPRESSION_TO_STRING a) ++ " - " ++ (EXPRESSION_TO_STRING b) ++ ")"
-  | EXPRESSION.SMALLER a b => "(" ++ (EXPRESSION_TO_STRING a) ++ " < " ++ (EXPRESSION_TO_STRING b) ++ ")"
-  | EXPRESSION.EQUALS a b => "(" ++ (EXPRESSION_TO_STRING a) ++ " == " ++ (EXPRESSION_TO_STRING b) ++ ")"
+def Exp_TO_STRING: Exp -> String
+  | FUNC f e => f ++ "(" ++ Exp_TO_STRING e ++ ")"
+  | VAR n => n
+  | CONSTANT n => s!"{n}"
+  | DIVIDE a b => "(" ++ (Exp_TO_STRING a) ++ " / " ++ (Exp_TO_STRING b) ++ ")"
+  | MULTIPLY a b => "(" ++ (Exp_TO_STRING a) ++ " x " ++ (Exp_TO_STRING b) ++ ")"
+  | PLUS a b => "(" ++ (Exp_TO_STRING a) ++ " + " ++ (Exp_TO_STRING b) ++ ")"
+  | MINUS a b => "(" ++ (Exp_TO_STRING a) ++ " - " ++ (Exp_TO_STRING b) ++ ")"
+  | SMALLER a b => "(" ++ (Exp_TO_STRING a) ++ " < " ++ (Exp_TO_STRING b) ++ ")"
+  | EQUALS a b => "(" ++ (Exp_TO_STRING a) ++ " == " ++ (Exp_TO_STRING b) ++ ")"
 
 
 
 
-instance: ToString EXPRESSION where
-  toString := EXPRESSION_TO_STRING
+instance: ToString Exp where
+  toString := Exp_TO_STRING
 
-open EXPRESSION
+open Exp
 
 inductive SYMBOL where
   | var (v: Variable) (amount: Nat) : SYMBOL
   | func (f: Function) (s: SYMBOL) (amount: Nat) : SYMBOL
 
-inductive EXPRESSION_RESULT (x: Type) where
-  | some (value: x) : EXPRESSION_RESULT x
+inductive Exp_RESULT (x: Type) where
+  | some (value: x) : Exp_RESULT x
   | DIV_BY_ZERO
-  | UNKNOWN_VAR (name: Variable) : EXPRESSION_RESULT x
-  | UNKNOWN_FUNC (name: Variable) : EXPRESSION_RESULT x
+  | UNKNOWN_VAR (name: Variable) : Exp_RESULT x
+  | UNKNOWN_FUNC (name: Variable) : Exp_RESULT x
 deriving BEq
 
-def bind_expression_result:  EXPRESSION_RESULT α → (α → EXPRESSION_RESULT β) → EXPRESSION_RESULT β
-  | EXPRESSION_RESULT.some v, f => f v
-  | EXPRESSION_RESULT.UNKNOWN_VAR name, _ => EXPRESSION_RESULT.UNKNOWN_VAR name
-  | EXPRESSION_RESULT.UNKNOWN_FUNC name, _ => EXPRESSION_RESULT.UNKNOWN_FUNC name
-  | EXPRESSION_RESULT.DIV_BY_ZERO, _ => EXPRESSION_RESULT.DIV_BY_ZERO
+def bind_Exp_result:  Exp_RESULT α → (α → Exp_RESULT β) → Exp_RESULT β
+  | Exp_RESULT.some v, f => f v
+  | Exp_RESULT.UNKNOWN_VAR name, _ => Exp_RESULT.UNKNOWN_VAR name
+  | Exp_RESULT.UNKNOWN_FUNC name, _ => Exp_RESULT.UNKNOWN_FUNC name
+  | Exp_RESULT.DIV_BY_ZERO, _ => Exp_RESULT.DIV_BY_ZERO
 
-def pure_expression_result {α : Type} (elem: α): EXPRESSION_RESULT α :=
-  EXPRESSION_RESULT.some elem
+def pure_Exp_result {α : Type} (elem: α): Exp_RESULT α :=
+  Exp_RESULT.some elem
 
-instance: Monad EXPRESSION_RESULT where
-  bind := bind_expression_result
-  pure := pure_expression_result
+instance: Monad Exp_RESULT where
+  bind := bind_Exp_result
+  pure := pure_Exp_result
 
-instance: ToString (EXPRESSION_RESULT Nat) where
-  toString (e: EXPRESSION_RESULT Nat) := match e with
-    | EXPRESSION_RESULT.some v => toString v
-    | EXPRESSION_RESULT.UNKNOWN_VAR name => "expression contains unknown var: " ++ name
-    | EXPRESSION_RESULT.UNKNOWN_FUNC name => "expression contains unknown function: " ++ name
-    | EXPRESSION_RESULT.DIV_BY_ZERO => "Division by zero "
+instance: ToString (Exp_RESULT Nat) where
+  toString (e: Exp_RESULT Nat) := match e with
+    | Exp_RESULT.some v => toString v
+    | Exp_RESULT.UNKNOWN_VAR name => "Exp contains unknown var: " ++ name
+    | Exp_RESULT.UNKNOWN_FUNC name => "Exp contains unknown function: " ++ name
+    | Exp_RESULT.DIV_BY_ZERO => "Division by zero "
 
 abbrev P_state := (List (Variable × Nat)) ×  (List (Function × (Nat -> Nat)))
 
@@ -96,81 +97,81 @@ instance: ToString P_state where
 
 
 #check (List (Nat × Nat))
---def eval_expression (var_map: List (Variable × Nat)): EXPRESSION -> EXPRESSION_RESULT (Nat × List SYMBOL)
-def eval_expression (env: P_state) : EXPRESSION -> EXPRESSION_RESULT Nat
-  | EXPRESSION.VAR n =>
+--def eval_Exp (var_map: List (Variable × Nat)): Exp -> Exp_RESULT (Nat × List SYMBOL)
+def eval_Exp (env: P_state) : Exp -> Exp_RESULT Nat
+  | Exp.VAR n =>
     let var_value := (var_map env).lookup n
     if (var_value == Option.none) then
-      EXPRESSION_RESULT.UNKNOWN_VAR n
+      Exp_RESULT.UNKNOWN_VAR n
     else
-      EXPRESSION_RESULT.some var_value.get!
+      Exp_RESULT.some var_value.get!
 
-  | EXPRESSION.FUNC name argument  =>
+  | Exp.FUNC name argument  =>
     let func_opt := (funcs env).lookup name
     match func_opt with
     | Option.some func =>
       do
-      let v_a <- eval_expression env argument
-      EXPRESSION_RESULT.some (func v_a)
+      let v_a <- eval_Exp env argument
+      Exp_RESULT.some (func v_a)
 
-    | Option.none => EXPRESSION_RESULT.UNKNOWN_FUNC name
+    | Option.none => Exp_RESULT.UNKNOWN_FUNC name
 
-  | EXPRESSION.CONSTANT n => EXPRESSION_RESULT.some n
+  | Exp.CONSTANT n => Exp_RESULT.some n
 
-  | EXPRESSION.DIVIDE e_a e_b =>
+  | Exp.DIVIDE e_a e_b =>
     do
-    let v_a <- eval_expression env e_a
-    let v_b <- eval_expression env e_b
+    let v_a <- eval_Exp env e_a
+    let v_b <- eval_Exp env e_b
 
     if ( v_b == 0) then
-      EXPRESSION_RESULT.DIV_BY_ZERO
+      Exp_RESULT.DIV_BY_ZERO
     else
-      EXPRESSION_RESULT.some (v_a / v_b)
+      Exp_RESULT.some (v_a / v_b)
 
-  | EXPRESSION.MULTIPLY e_a e_b =>
+  | Exp.MULTIPLY e_a e_b =>
     do
-    let v_a <- eval_expression env e_a
-    let v_b <- eval_expression env e_b
-    EXPRESSION_RESULT.some (v_a * v_b)
+    let v_a <- eval_Exp env e_a
+    let v_b <- eval_Exp env e_b
+    Exp_RESULT.some (v_a * v_b)
 
 
-  | EXPRESSION.PLUS e_a e_b =>
+  | Exp.PLUS e_a e_b =>
     do
-    let v_a <- eval_expression env e_a
-    let v_b <- eval_expression env e_b
-    EXPRESSION_RESULT.some (v_a + v_b)
+    let v_a <- eval_Exp env e_a
+    let v_b <- eval_Exp env e_b
+    Exp_RESULT.some (v_a + v_b)
 
-  | EXPRESSION.MINUS e_a e_b =>
+  | Exp.MINUS e_a e_b =>
     do
-    let v_a <- eval_expression env e_a
-    let v_b <- eval_expression env e_b
-    EXPRESSION_RESULT.some (v_a - v_b)
+    let v_a <- eval_Exp env e_a
+    let v_b <- eval_Exp env e_b
+    Exp_RESULT.some (v_a - v_b)
 
-  | EXPRESSION.SMALLER e_a e_b =>
+  | Exp.SMALLER e_a e_b =>
     do
-    let v_a <- eval_expression env e_a
-    let v_b <- eval_expression env e_b
+    let v_a <- eval_Exp env e_a
+    let v_b <- eval_Exp env e_b
     if v_a < v_b then
-      EXPRESSION_RESULT.some 1
+      Exp_RESULT.some 1
     else
-      EXPRESSION_RESULT.some 0
+      Exp_RESULT.some 0
 
-  | EXPRESSION.EQUALS e_a e_b =>
+  | Exp.EQUALS e_a e_b =>
     do
-    let v_a <- eval_expression env e_a
-    let v_b <- eval_expression env e_b
+    let v_a <- eval_Exp env e_a
+    let v_b <- eval_Exp env e_b
     if v_a == v_b then
-      EXPRESSION_RESULT.some 1
+      Exp_RESULT.some 1
     else
-      EXPRESSION_RESULT.some 0
+      Exp_RESULT.some 0
 
 
 
--- inductive TYPED_EXPRESSION: (List String) -> EXPRESSION -> Ty -> Type
---   | TYPED_CONSTANT :  TYPED_EXPRESSION GAMMA EXPRESSION.CONSTANT nat
---   | TYPED_PLUS (typed_e1: TYPED_EXPRESSION GAMMA e1 nat)
---                (typed_e2: TYPED_EXPRESSION GAMMA e2 nat):
---                 TYPED_EXPRESSION GAMMA (EXPRESSION.PLUS e1 e2) nat
+-- inductive TYPED_Exp: (List String) -> Exp -> Ty -> Type
+--   | TYPED_CONSTANT :  TYPED_Exp GAMMA Exp.CONSTANT nat
+--   | TYPED_PLUS (typed_e1: TYPED_Exp GAMMA e1 nat)
+--                (typed_e2: TYPED_Exp GAMMA e2 nat):
+--                 TYPED_Exp GAMMA (Exp.PLUS e1 e2) nat
 
 
 def vars: List (Variable × Nat) := [("v1", 3)]
@@ -184,29 +185,29 @@ def test_env : P_state := (vars, [("add_one", add_one )])
 #eval vars
 
 
-def e_1: EXPRESSION := EXPRESSION.MULTIPLY (EXPRESSION.PLUS (EXPRESSION.CONSTANT 3) (EXPRESSION.CONSTANT 34)) (EXPRESSION.CONSTANT 2)
-def e_2_nan: EXPRESSION := EXPRESSION.MULTIPLY (EXPRESSION.CONSTANT 2) (EXPRESSION.DIVIDE (EXPRESSION.CONSTANT 3) (EXPRESSION.CONSTANT 0))
-def e_3_unknown: EXPRESSION := EXPRESSION.MULTIPLY (EXPRESSION.VAR "v_unknown") (EXPRESSION.DIVIDE (EXPRESSION.CONSTANT 3) (EXPRESSION.CONSTANT 0))
-def e_4_var: EXPRESSION := EXPRESSION.MINUS (EXPRESSION.VAR "v1") (EXPRESSION.DIVIDE (EXPRESSION.CONSTANT 4) (EXPRESSION.CONSTANT 2))
-def e_5_var_and_func: EXPRESSION := EXPRESSION.MINUS (EXPRESSION.VAR "v1") (EXPRESSION.FUNC "add_one" (EXPRESSION.CONSTANT 1))
+def e_1: Exp := Exp.MULTIPLY (Exp.PLUS (Exp.CONSTANT 3) (Exp.CONSTANT 34)) (Exp.CONSTANT 2)
+def e_2_nan: Exp := Exp.MULTIPLY (Exp.CONSTANT 2) (Exp.DIVIDE (Exp.CONSTANT 3) (Exp.CONSTANT 0))
+def e_3_unknown: Exp := Exp.MULTIPLY (Exp.VAR "v_unknown") (Exp.DIVIDE (Exp.CONSTANT 3) (Exp.CONSTANT 0))
+def e_4_var: Exp := Exp.MINUS (Exp.VAR "v1") (Exp.DIVIDE (Exp.CONSTANT 4) (Exp.CONSTANT 2))
+def e_5_var_and_func: Exp := Exp.MINUS (Exp.VAR "v1") (Exp.FUNC "add_one" (Exp.CONSTANT 1))
 
 
 #eval vars
 
 #eval (e_1)
-#eval (eval_expression test_env e_1 == EXPRESSION_RESULT.some 74)
+#eval (eval_Exp test_env e_1 == Exp_RESULT.some 74)
 
 #eval (e_2_nan)
-#eval (eval_expression test_env e_2_nan == EXPRESSION_RESULT.DIV_BY_ZERO)
+#eval (eval_Exp test_env e_2_nan == Exp_RESULT.DIV_BY_ZERO)
 
 #eval (e_3_unknown)
-#eval (eval_expression test_env e_3_unknown == EXPRESSION_RESULT.UNKNOWN_VAR "v_unknown")
+#eval (eval_Exp test_env e_3_unknown == Exp_RESULT.UNKNOWN_VAR "v_unknown")
 
 #eval (e_4_var)
-#eval (eval_expression test_env e_4_var == EXPRESSION_RESULT.some 1)
+#eval (eval_Exp test_env e_4_var == Exp_RESULT.some 1)
 
 #eval (e_5_var_and_func)
-#eval (eval_expression test_env e_5_var_and_func)
-#eval (eval_expression test_env e_5_var_and_func == EXPRESSION_RESULT.some 1)
+#eval (eval_Exp test_env e_5_var_and_func)
+#eval (eval_Exp test_env e_5_var_and_func == Exp_RESULT.some 1)
 
 def faraway2 := 3
