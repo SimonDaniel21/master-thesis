@@ -63,35 +63,41 @@ instance: ToString (EXPRESSION_RESULT Nat) where
     | EXPRESSION_RESULT.UNKNOWN_FUNC name => "expression contains unknown function: " ++ name
     | EXPRESSION_RESULT.DIV_BY_ZERO => "Division by zero "
 
-def environment := (List (Variable × Nat)) ×  (List (Function × (Nat -> Nat)))
+abbrev P_state := (List (Variable × Nat)) ×  (List (Function × (Nat -> Nat)))
+
 
 def test_list: List (String × String) := [("a", "eins"),  ("b", "zwei")]
 
 
-#check environment
+#check P_state
 
 def test_type := Nat × Nat
 
 def test_v : test_type := (2,3)
 
-def var_map (env: environment): (List (Variable × Nat)) :=
+def var_map (env: P_state): (List (Variable × Nat)) :=
   env.fst
 
-def funcs (env: environment): (List (Function × (Nat -> Nat))) :=
+def funcs (env: P_state): (List (Function × (Nat -> Nat))) :=
   env.snd
 
-def environment_to_string (env: environment):  String :=
-  toString (var_map env)
+def var_map_to_string (v: List (Variable × Nat)):  String :=
+  match v with
+  | List.cons (v_name, v_value) rest => v_name ++ "->" ++ toString v_value ++ ", " ++ var_map_to_string rest
+  | List.nil => ""
 
-def empty_environment : environment := ([],[])
+def P_state_to_string (env: P_state):  String :=
+  var_map_to_string (var_map env)
 
-instance: ToString environment where
-  toString := environment_to_string
+def empty_P_state : P_state := ([],[])
+
+instance: ToString P_state where
+  toString := P_state_to_string
 
 
 #check (List (Nat × Nat))
 --def eval_expression (var_map: List (Variable × Nat)): EXPRESSION -> EXPRESSION_RESULT (Nat × List SYMBOL)
-def eval_expression (env: environment) : EXPRESSION -> EXPRESSION_RESULT Nat
+def eval_expression (env: P_state) : EXPRESSION -> EXPRESSION_RESULT Nat
   | EXPRESSION.VAR n =>
     let var_value := (var_map env).lookup n
     if (var_value == Option.none) then
@@ -172,8 +178,9 @@ def vars: List (Variable × Nat) := [("v1", 3)]
 def add_one (v: Nat): Nat :=
   v+1
 
-def test_env : environment := (vars, [("add_one", add_one )])
+def test_env : P_state := (vars, [("add_one", add_one )])
 
+#eval test_env
 #eval vars
 
 
@@ -201,3 +208,5 @@ def e_5_var_and_func: EXPRESSION := EXPRESSION.MINUS (EXPRESSION.VAR "v1") (EXPR
 #eval (e_5_var_and_func)
 #eval (eval_expression test_env e_5_var_and_func)
 #eval (eval_expression test_env e_5_var_and_func == EXPRESSION_RESULT.some 1)
+
+def faraway2 := 3

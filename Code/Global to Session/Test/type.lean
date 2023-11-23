@@ -2,7 +2,7 @@
 @[reducible] def Channel := String
 @[reducible] def Variable := String
 @[reducible] def Function := String
-@[reducible] def Agent := String
+@[reducible] def Location := String
 
 inductive Ty : Type
   | nat: Ty

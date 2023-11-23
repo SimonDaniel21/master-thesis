@@ -1,169 +1,104 @@
 import Test.type
 import Test.expression
 import Lean
+import Test.my_utils
+import Test.my_logs
 
-inductive GLOBAL_PROGRAM where
-  | IF : Agent -> Variable -> EXPRESSION -> GLOBAL_PROGRAM -> GLOBAL_PROGRAM -> GLOBAL_PROGRAM -> GLOBAL_PROGRAM
-  | SEND_RECV    : Variable -> Agent -> Agent -> GLOBAL_PROGRAM -> GLOBAL_PROGRAM
-  | END     :  Agent -> EXPRESSION -> GLOBAL_PROGRAM
-  | COMPUTE (v: Variable) (e: EXPRESSION) (a: Agent) :   GLOBAL_PROGRAM -> GLOBAL_PROGRAM
+namespace G
 
-inductive GLOBAL_SESSION_TYPE where
-  | SEND_RECV    :  Variable -> Agent -> Agent -> GLOBAL_SESSION_TYPE -> GLOBAL_SESSION_TYPE
-  | END     :   GLOBAL_SESSION_TYPE
+  open Lean
 
+  inductive P where
+    | IF : Location -> Variable -> EXPRESSION -> P -> P -> P -> P
+    | SEND_RECV    : Variable -> Location -> Location -> P -> P
+    | COMPUTE (v: Variable) (e: EXPRESSION) (a: Location) :   P -> P
+    | END     :  Location -> EXPRESSION -> P
 
-def GLOBAL_TO_TYPE: GLOBAL_PROGRAM -> GLOBAL_SESSION_TYPE
-  | GLOBAL_PROGRAM.IF a name e opt_a opt_b p => GLOBAL_SESSION_TYPE.END
-  | GLOBAL_PROGRAM.SEND_RECV v a b p => GLOBAL_SESSION_TYPE.SEND_RECV v a b (GLOBAL_TO_TYPE p)
-  | GLOBAL_PROGRAM.COMPUTE _ _ _ p => (GLOBAL_TO_TYPE p)
-  | GLOBAL_PROGRAM.END _ _ => GLOBAL_SESSION_TYPE.END
+  inductive T where
+    | IF : Location -> T -> T -> T -> T
+    | SEND_RECV    :  Location -> Location -> T -> T
+    | END     :   T
 
-def GLOBAL_PROGRAM_TO_STRING: GLOBAL_PROGRAM -> String
-  | GLOBAL_PROGRAM.IF a name e opt_a opt_b p => name ++ "@" ++ a ++ " <= if " ++ toString e ++ "\n" ++ GLOBAL_PROGRAM_TO_STRING opt_a ++ "\nelse\n" ++ GLOBAL_PROGRAM_TO_STRING opt_b ++ "\nend if\n" ++ GLOBAL_PROGRAM_TO_STRING p
-  | GLOBAL_PROGRAM.SEND_RECV v sender receiver p =>
-    v ++ "@" ++ receiver ++ " <= " ++ v ++  "@" ++ sender ++ "\n" ++ (GLOBAL_PROGRAM_TO_STRING p)
-  | GLOBAL_PROGRAM.END a result => "RETURN " ++ toString result ++ "@" ++ a
+  inductive Eval_error where
+  | unknown_Location (a: Location) : Eval_error
+  | expression_error (e: EXPRESSION_RESULT Nat): Eval_error
+  | unknown_message_var (name: Variable) : Eval_error
 
-  | GLOBAL_PROGRAM.COMPUTE v e a p => v ++  "@" ++ a ++ " <= " ++ (EXPRESSION_TO_STRING e) ++ " @" ++ a ++ "\n" ++ (GLOBAL_PROGRAM_TO_STRING p)
+  def Env := HashMap Location P_state
 
-instance: ToString GLOBAL_PROGRAM where
-  toString := GLOBAL_PROGRAM_TO_STRING
+  abbrev Eval_res := ExceptT Eval_error (StateT Env (with_logs String)) Nat
+end G
 
-def GLOBAL_TYPE_TO_STRING: GLOBAL_SESSION_TYPE -> String
-  | GLOBAL_SESSION_TYPE.SEND_RECV v sender receiver p =>
-    sender ++ " sends " ++ v ++ " to " ++  receiver ++ "\n" ++ (GLOBAL_TYPE_TO_STRING p)
-  | GLOBAL_SESSION_TYPE.END => "END"
+open G
+open P
 
-instance: ToString GLOBAL_SESSION_TYPE where
-  toString := GLOBAL_TYPE_TO_STRING
+def GLOBAL_TO_TYPE: P -> T
+  | IF l _ _ opt_a opt_b p => T.IF l (GLOBAL_TO_TYPE opt_a) (GLOBAL_TO_TYPE opt_b) (GLOBAL_TO_TYPE p)
+  | SEND_RECV _ a b p => T.SEND_RECV a b (GLOBAL_TO_TYPE p)
+  | COMPUTE _ _ _ p => (GLOBAL_TO_TYPE p)
+  | END _ _ => T.END
 
-open Lean
+def GP_TO_STRING: P -> String
+  | IF a name e opt_a opt_b p => name ++ "@" ++ a ++ " <= if " ++ toString e ++ "\n" ++ GP_TO_STRING opt_a ++ "\nelse\n" ++ GP_TO_STRING opt_b ++ "\nend if\n" ++ GP_TO_STRING p
+  | SEND_RECV v sender receiver p =>
+    v ++ "@" ++ receiver ++ " <= " ++ v ++  "@" ++ sender ++ "\n" ++ (GP_TO_STRING p)
+  | END a result => "RETURN " ++ toString result ++ "@" ++ a
 
-def global_environment := HashMap Agent environment
+  | COMPUTE v e a p => v ++  "@" ++ a ++ " <= " ++ (EXPRESSION_TO_STRING e) ++ " @" ++ a ++ "\n" ++ (GP_TO_STRING p)
 
-#eval List.map (fun (x: Nat) => toString x) [1,2,3]
-#eval [2,3,44].map (· + 2)
-#eval (none).map (fun x => x*3)
+instance: ToString P where
+  toString := GP_TO_STRING
 
-#eval (pure "2.2" : Option String)
-#eval pure (·*·+· ) <*> some 4 <*> some 3 <*> some 2
+def GT_TO_STRING: T -> String
+  | T.IF l t1 t2 p => "opt1: " ++ l ++ GT_TO_STRING t1 ++ "opt2: " ++ GT_TO_STRING t2 ++ "|" ++ GT_TO_STRING p
+  | T.SEND_RECV sender receiver p =>
+    sender ++ " --> " ++  receiver ++ "\n" ++ (GT_TO_STRING p) ++ ": Nat."
+  | T.END => "end"
 
-instance: Applicative List where
-  pure := List.pure
-  seq f x := List.bind f fun y => Functor.map y (x ())_
-
-  #eval [(·*2)] <*> [2,3]
-
-
-
-instance: ToString global_environment where
-  toString (env: global_environment) := toString ((env.toList.map (fun x => x.fst ++ " ->¬" ++ toString x.snd ++ "¬")).intersperse "¬")
+instance: ToString T where
+  toString := GT_TO_STRING
 
 
---instance: ToString global_environment where
---  toString (env: global_environment) := toString (env.toList.map environment_to_string intersperse "\n")
+instance: ToString Env where
+  toString (e: Env) := list_to_continuos_string ((e.toList.map (fun x => "@" ++ x.fst ++ "\n  " ++ toString x.snd)).intersperse "\n")
 
 
-instance: ToString GLOBAL_SESSION_TYPE where
-  toString := GLOBAL_TYPE_TO_STRING
 
-structure program_state where
-  var: Nat
-
-structure with_logs (l: Type) (t: Type) where
-  value: t
-  logs: List l
-
-instance: ToString (with_logs String Nat) where
-  toString := fun v_with_logs => "value => " ++ toString v_with_logs.value ++ "\nLogs =>¬" ++ toString v_with_logs.logs
-
-def append (s: List String): with_logs String PUnit :=
-  {value:= (), logs:= s}
+open Eval_error
 
 
-def my_add2(v: Nat) : with_logs Nat :=
-  {value := v+2, logs := ["+2 (" ++ toString v ++ ") "]}
-
-def my_mult3(v: Nat) : with_logs Nat :=
-  {value := v*3, logs := ["*3 (" ++ toString v ++ ") "]}
-
-def bind_with_logs:  with_logs α → (α → with_logs β) → with_logs β :=
-  fun x f =>
-    let result := f x.value
-    {value := result.value, logs := x.logs.append result.logs}
-
-instance: Monad with_logs where
-  bind := bind_with_logs
-  pure := fun x => {value := x, logs := []}
-
-
-#check (with_logs Nat)
-
-
-def test: with_logs Nat := (do
-  let x <- my_add2 2
-  let y <- my_mult3 x
-  return y)
-
-#eval test
-
-
-inductive evaluation_error where
-  | unknown_agent (a: Agent) : evaluation_error
-  | expression_error (e: EXPRESSION_RESULT Nat): evaluation_error
-  | unknown_message_var (name: Variable) : evaluation_error
-
-
-instance: ToString evaluation_error where
+instance: ToString Eval_error where
   toString := fun x => match x with
-  | evaluation_error.unknown_agent a => "unknown agent " ++ a ++ " introduced"
-  | evaluation_error.expression_error e => "Expression Error:\n" ++ toString e
-  | evaluation_error.unknown_message_var v => "unknown message Variable: " ++ v
-trans(trans(trans)) Nat
-abbrev global_evaluation_result := ExceptT evaluation_error (StateT global_environment with_logs) Nat
-
-inductive global_evaluation_result_old (x: Type) where
-  | state (env: global_environment) (logs: List global_environment) (result: x): global_evaluation_result_old x
-  | unknown_agent (a: Agent) (logs: List global_environment) : global_evaluation_result_old x
-  | expression_error (e: EXPRESSION_RESULT Nat) (logs: List global_environment): global_evaluation_result_old x
-  | unknown_message_var (name: Variable) (logs: List global_environment): global_evaluation_result_old x
-
-abbrev myStateM := StateM Nat Nat
-
-def zuString (m: myStateM) : String :=
-
-  match m with
-  | _ => "" 4
-
-#check myStateM
+  | Eval_error.unknown_Location a => "unknown Location " ++ a ++ " introduced"
+  | Eval_error.expression_error e => "Expression Error:\n" ++ toString e
+  | Eval_error.unknown_message_var v => "unknown message Variable: " ++ v
 
 
-abbrev test_monad := ExceptT evaluation_error with_logs Nat
+-- inductive global_evaluation_result_old (x: Type) where
+--   | state (Env: global_P_state) (logs: List global_P_state) (result: x): global_evaluation_result_old x
+--   | unknown_Location (a: Location) (logs: List global_P_state) : global_evaluation_result_old x
+--   | expression_error (e: EXPRESSION_RESULT Nat) (logs: List global_P_state): global_evaluation_result_old x
+--   | unknown_message_var (name: Variable) (logs: List global_P_state): global_evaluation_result_old x
 
-abbrev test_monad2 := ExceptT evaluation_error (StateM Nat) Nat
-
-
-instance: ToString global_evaluation_result where
+instance: ToString (with_logs String (Except Eval_error Nat × Env)) where
   toString := fun eval =>
-   ""
-
-def global_evaluation_old := global_environment -> global_evaluation_result
+    let (res_e, e) := eval.value
+    let result_string: String := match res_e with
+    | Except.error e => "error:\n" ++ toString e
+    | Except.ok res => "res:\n" ++ toString res
+    "logs:\n" ++ list_to_string_seperated_by eval.logs "\n---------------------\n" ++ "Env:\n" ++ toString e ++ "\n" ++ result_string
 
 def add  (b: Nat) (a: Nat := 2): Nat :=
   a + b
 
 #eval (add 3 3)
 
-def test_g_env: global_environment := HashMap.empty
-
-open GLOBAL_PROGRAM
-
-def eval_global: GLOBAL_PROGRAM -> global_evaluation_result
+def eval_global: P -> Eval_res
   | SEND_RECV v a b p =>
     do
-    <-append ["mylog"]
     let state <- get
+    append [toString state]
+    append ["send_recv"]
     let sender_state_opt := state.find? a
     let receiver_state_opt := state.find? b
 
@@ -176,20 +111,19 @@ def eval_global: GLOBAL_PROGRAM -> global_evaluation_result
         match sender_value_opt with
         | Option.some sender_value =>
           let new_var_map: List (Variable × Nat) := (var_map receiver_state).concat (v, sender_value)
-          let new_state: global_environment := (state.insert b (new_var_map, (funcs receiver_state)))
+          let new_state: Env := (state.insert b (new_var_map, (funcs receiver_state)))
           set new_state
           eval_global p
 
-        | Option.none => throw (evaluation_error.unknown_message_var v)
+        | Option.none => throw (Eval_error.unknown_message_var v)
 
-      | Option.none => throw (evaluation_error.unknown_agent b)
-    | Option.none => throw (evaluation_error.unknown_agent a)
-
-
-    throw (evaluation_error.unknown_agent "agent9")
-   | GLOBAL_PROGRAM.COMPUTE v e a p =>
+      | Option.none => throw (Eval_error.unknown_Location b)
+    | Option.none => throw (Eval_error.unknown_Location a)
+   | COMPUTE v e a p =>
     do
       let state <- get
+      append [toString state]
+      append ["Compute"]
       let local_state_opt := state.find? a
       match local_state_opt with
       | Option.some local_state =>
@@ -197,17 +131,30 @@ def eval_global: GLOBAL_PROGRAM -> global_evaluation_result
         match evaluation with
         | EXPRESSION_RESULT.some r =>
           let new_var_map: List (Variable × Nat) := (var_map local_state).concat (v, r)
-          let new_state: global_environment := (state.insert a (new_var_map, (funcs local_state)))
+          let new_state: Env := (state.insert a (new_var_map, (funcs local_state)))
           set new_state
           eval_global p
-        | x => throw (evaluation_error.expression_error x)
+        | x => throw (Eval_error.expression_error x)
 
-      | Option.none => throw (evaluation_error.unknown_agent a)
-  | GLOBAL_PROGRAM.IF a v e opt_a opt_b p =>
+      | Option.none => throw (Eval_error.unknown_Location a)
+  | IF a v e opt_a opt_b p =>
     do
     let state <- get
-    throw (evaluation_error.unknown_agent "if not supported")
-  | GLOBAL_PROGRAM.END a e =>
+    append [toString state]
+    append ["IF"]
+    let local_state_opt := state.find? a
+    match local_state_opt with
+    | Option.some local_state =>
+      let expr_result := eval_expression local_state e
+      match expr_result with
+      | EXPRESSION_RESULT.some r =>
+        let new_var_map: List (Variable × Nat) := (var_map local_state).concat (v, r)
+        let new_state: Env := (state.insert a (new_var_map, (funcs local_state)))
+        set new_state
+        eval_global p
+      | x => throw (Eval_error.expression_error x)
+    | Option.none => throw (Eval_error.unknown_Location a)
+  | END a e =>
     do
     let state <- get
     let local_state_opt := state.find? a
@@ -216,54 +163,56 @@ def eval_global: GLOBAL_PROGRAM -> global_evaluation_result
       let evaluation := eval_expression local_state e
       match evaluation with
       | EXPRESSION_RESULT.some r => return r
-      | x =>  throw (evaluation_error.expression_error x)
-    | Option.none => throw (evaluation_error.unknown_agent a)
+      | x =>  throw (Eval_error.expression_error x)
+    | Option.none => throw (Eval_error.unknown_Location a)
 
 
-
+open Lean
 
 def price_of (x: Nat): Nat := x + 100
+def delivery_date (_x: Nat): Nat := 42
 
-def l_test_env1: environment := ([("title", 0),("budget", 42)],[])
-def l_test_env2: environment := ([],[("price_of", price_of)])
+def l_test_Env1: P_state := ([("title", 0),("budget", 42)],[])
+def l_test_Env2: P_state := ([],[("price_of", price_of), ("delivery_date_of", delivery_date)])
 
-def g_test_env : global_environment := HashMap.ofList [("buyer", l_test_env1), ("seller", l_test_env2)]
-
-
-#eval g_test_env
-
-def test_program_1: GLOBAL_PROGRAM := GLOBAL_PROGRAM.SEND_RECV "var1" "client" "server" (GLOBAL_PROGRAM.END "client" (EXPRESSION.VAR "var1"))
-def test_program_2: GLOBAL_PROGRAM := GLOBAL_PROGRAM.SEND_RECV "var1" "client" "server"
-  (GLOBAL_PROGRAM.SEND_RECV "var2" "server" "client"
-  (GLOBAL_PROGRAM.COMPUTE "var3" (EXPRESSION.DIVIDE (EXPRESSION.CONSTANT 2) (EXPRESSION.CONSTANT 0)) "server" (GLOBAL_PROGRAM.END "server" (EXPRESSION.VAR "var3"))))
-
-#eval eval_global test_program_1
-
-def trade_accept : GLOBAL_PROGRAM := (GLOBAL_PROGRAM.COMPUTE "decision" (EXPRESSION.CONSTANT 1) "buyer"
-  (GLOBAL_PROGRAM.SEND_RECV "decision" "buyer" "seller" (GLOBAL_PROGRAM.END "buyer" (EXPRESSION.CONSTANT 1))))
-
-def trade_decline : GLOBAL_PROGRAM := (GLOBAL_PROGRAM.COMPUTE "decision" (EXPRESSION.CONSTANT 0) "buyer"
-  (GLOBAL_PROGRAM.SEND_RECV "decision" "buyer" "seller" (GLOBAL_PROGRAM.END "buyer" (EXPRESSION.CONSTANT 0))))
+def g_test_Env : G.Env := HashMap.ofList [("buyer", l_test_Env1), ("seller", l_test_Env2)]
 
 
-def buyer_seller: GLOBAL_PROGRAM := GLOBAL_PROGRAM.SEND_RECV "title" "buyer" "seller"
-  (GLOBAL_PROGRAM.COMPUTE "price" (EXPRESSION.FUNC "price_of" (EXPRESSION.VAR "title")) "seller"
-  (GLOBAL_PROGRAM.SEND_RECV "price" "seller" "buyer"
-  (GLOBAL_PROGRAM.IF "buyer" "decision" (EXPRESSION.SMALLER (EXPRESSION.VAR "price") (EXPRESSION.CONSTANT 300)) trade_accept trade_decline
-  (GLOBAL_PROGRAM.END "buyer" (EXPRESSION.VAR "decision")))))
+#eval g_test_Env
 
-def buyer_seller2: GLOBAL_PROGRAM := GLOBAL_PROGRAM.SEND_RECV "title" "buyer" "seller" (GLOBAL_PROGRAM.END "buyer" (EXPRESSION.VAR "title"))
+def test_program_1: P := SEND_RECV "var1" "client" "server" (END "client" (EXPRESSION.VAR "var1"))
+def test_program_2: P := SEND_RECV "var1" "client" "server"
+  (SEND_RECV "var2" "server" "client"
+  (COMPUTE "var3" (EXPRESSION.DIVIDE (EXPRESSION.CONSTANT 2) (EXPRESSION.CONSTANT 0)) "server" (END "server" (EXPRESSION.VAR "var3"))))
 
-#eval g_test_env
+#check (eval_global test_program_1 g_test_Env)
+
+def trade_accept : P := (COMPUTE "date" (EXPRESSION.FUNC "delivery_date_of" (EXPRESSION.VAR "a")) "seller"
+  (END "buyer" (EXPRESSION.VAR "date")))
+
+def trade_decline : P := END "buyer" (EXPRESSION.CONSTANT 0)
+
+
+def buyer_seller: P:= SEND_RECV "title" "buyer" "seller"
+  (COMPUTE "price" (EXPRESSION.FUNC "price_of" (EXPRESSION.VAR "title")) "seller"
+  (SEND_RECV "price" "seller" "buyer"
+  (IF "buyer" "result" (EXPRESSION.SMALLER (EXPRESSION.VAR "price") (EXPRESSION.CONSTANT 300)) trade_accept trade_decline
+  (END "buyer" (EXPRESSION.VAR "result")))))
+
+def buyer_seller2: P := SEND_RECV "title" "buyer" "seller" (END "buyer" (EXPRESSION.VAR "title"))
+
+#eval g_test_Env
 #eval (buyer_seller)
-#eval (eval_global buyer_seller g_test_env)
-
+#eval (eval_global buyer_seller g_test_Env)
+#check (eval_global buyer_seller g_test_Env)
 
 #eval (buyer_seller2)
-#check (eval_global buyer_seller2 g_test_env)
+#eval (eval_global buyer_seller2 g_test_Env)
 
 #eval (test_program_1)
 
 #eval (test_program_2)
 #eval (eval_global test_program_2 HashMap.empty)
 #eval (GLOBAL_TO_TYPE test_program_2)
+
+#eval ( test_program_1)
