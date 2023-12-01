@@ -42,36 +42,31 @@ namespace L
   abbrev msg := ((Location × Location)  × Variable) × Nat
   abbrev lbl_msg := (Location × Location) × BranchChoice
 
-  ---abbrev eval_res := ExceptT eval_error (StateT env (OptionT (with_logs String))) (Nat × (List msg))
-
-
-
-  inductive eval_state where
-  | finished  : Nat -> eval_state
-  | blocking  : eval_state
-  | ready     : eval_state
+  inductive eval_status where
+  | finished  : Nat -> eval_status
+  | blocking  : eval_status
+  | ready     : eval_status
   deriving BEq
 
-  structure local_state where
+  structure eval_state where
     env     : P_state
     loc     : Location
     prog    : P
-    status  : eval_state := eval_state.ready
+    status  : eval_status := eval_status.ready
 
-  structure state where
+  structure group_eval_state where
     messages: List msg
     l_msgs  : List lbl_msg
-    current : local_state
-    progs   : List local_state
+    current : eval_state
+    progs   : List eval_state
     results : List (located Nat)
 
   --abbrev eval_resM := ExceptT eval_error (StateM state) eval_res
 
-  abbrev trace := List (state)
+  abbrev trace := List (group_eval_state)
 end L
 
 open L
-section PROGRAM
 open P
 
 def LOCAL_TO_TYPE: L.P -> L.T
@@ -94,18 +89,6 @@ def substitute_end (new_end: L.P):L.P -> L.P
   | COMPUTE v e p => COMPUTE v e (substitute_end new_end p)
   | NOOP p => NOOP (substitute_end new_end p)
   | END _ => new_end
-
-
--- def final_exp: L.P -> Option Exp
---   | IF _ _ _ _ p => final_exp p
---   | SEND _ _ _ p => final_exp p
---   | RECV _ _ p => final_exp p
---   | SEND_LBL _ _ p => final_exp p
---   | BRANCH_ON _ _ _ => final_exp
---   | COMPUTE _ _ p => final_exp p
---   | NOOP p => final_exp p
---   | END e => e
-
 
 
 def LP_TO_STRING_single(i: Nat) (p: P): String :=
@@ -159,11 +142,11 @@ instance: ToString L.P where
 instance: ToString L.T where
   toString := LT_TO_STRING 0
 
-instance: ToString L.eval_state where
+instance: ToString L.eval_status where
   toString := fun x => match x with
-  | eval_state.finished r  => "finished (" ++ toString r ++ ")"
-  | eval_state.blocking    => "blocking"
-  | eval_state.ready       => "ready"
+  | eval_status.finished r  => "finished (" ++ toString r ++ ")"
+  | eval_status.blocking    => "blocking"
+  | eval_status.ready       => "ready"
 
 instance: ToString L.eval_error where
   toString := fun x => match x with
@@ -171,29 +154,27 @@ instance: ToString L.eval_error where
     | eval_error.info s => "Error: " ++ s
     | eval_error.deadlock => "Deadlock"
 
-instance: ToString L.local_state where
+instance: ToString L.eval_state where
   toString := fun x =>
     x.loc ++ "(" ++ toString x.status ++ "):\n" ++ toString x.env
 
-instance: ToString L.state where
+instance: ToString L.group_eval_state where
   toString := fun x =>
-    let state_strings := list_to_string_seperated_by (x.progs.map (fun x => toString x))  "\n"
-   "branch_messages:\n" ++ toString x.l_msgs ++ "\nmessages:\n" ++ toString x.messages ++ "\nrunning:\n" ++ toString x.current ++ "\nothers:\n" ++ state_strings ++ "\nprogram@" ++ x.current.loc ++ ":\n " ++ LP_TO_STRING_single 0 x.current.prog
+    let state_strings := list_to_string_seperated_by (x.progs.map (fun x => toString x))  "\n  "
+   "branch_messages:\n  " ++ toString x.l_msgs ++ "\nmessages:\n  " ++ toString x.messages ++ "\nstates:\n  " ++ toString x.current ++ "\n" ++ state_strings ++ "\nprogram@" ++ x.current.loc ++ ":\n " ++ LP_TO_STRING_single 0 x.current.prog
 
 instance: ToString trace where
   toString := fun x => list_to_string_seperated_by (x.map (fun y => toString y)) "\n-------------------\n"
 
-
-
-instance: ToString (Except eval_error eval_state × state) where
+instance: ToString (Except eval_error eval_status × group_eval_state) where
   toString := fun x => match x.fst with
     | Except.ok res =>  toString x.snd ++ "result: " ++ toString res
     | Except.error e => toString x.snd ++ "error:" ++ toString e
 
 
-
-def swap_running_program (s: state): Option state :=
-  let canidates := s.progs.filter (fun x => x.status == eval_state.ready)
+-- swaps the current eval_state with an eval_state that is "ready". returns none if there are none
+def swap_running_program (s: group_eval_state): Option group_eval_state :=
+  let canidates := s.progs.filter (fun x => x.status == eval_status.ready)
   match canidates with
   | [] => Option.none
   | nc::_ =>
@@ -201,80 +182,21 @@ def swap_running_program (s: state): Option state :=
     let new_others := without_new.cons s.current
     Option.some {s with current := nc, progs := new_others}
 
+-- sets the current eval_status to blocking and tries to swap
+def block_current (s: group_eval_state): Option group_eval_state :=
+  swap_running_program {s with current := {s.current with status := eval_status.blocking}}
 
-/--
-  instance: Inhabited eval_resM where
-  default := fun x => (Except.error eval_error.deadlock, {messages := [], current := {env := empty_P_state, loc := "none", prog:= L.P.END Option.none, ready := false}, progs:= []})
+-- sets the current eval_status to finish with res and tries to swap
+def finish_current (s: group_eval_state) (res: Nat): Option group_eval_state :=
+  swap_running_program {s with current := {s.current with status := eval_status.finished res}}
 
-partial def eval_local: eval_resM := do
-  let state <- get
-  let running_program := state.current.prog
-  let c_env := state.current.env
-
-  match running_program with
-  | NOOP p => eval_local
-  | IF v e opt_a opt_b p =>
-
-    let evaluation := eval_Exp c_env e
-      match evaluation with
-      | Exp_RESULT.some r =>
-        let new_var_map: List (Variable × Nat) := (var_map c_env).concat (v, r)
-        let new_env: P_state := (new_var_map, (funcs c_env))
-        set { state with current := {state.current with env := new_env, prog := p} }
-        eval_local
-      | x => throw (eval_error.Exp_error x)
-
-  | SEND e v receiver p => do
-    let var_opt := (var_map c_env).lookup v
-    match var_opt with
-    | Option.some var =>
-      let new_message: msg := (((state.current.loc, receiver), v), var)
-      set { state with messages := state.messages.cons new_message, current := {state.current with prog := p}}
-      eval_local
-    | Option.none => throw (eval_error.unknown_message_var v)
-
-  | RECV v_name sender p => do
-    let v_opt := state.messages.lookup ((sender, state.current.loc), v_name)
-    match v_opt with
-    | Option.some v =>
-      let new_var_map: List (Variable × Nat) := (var_map c_env).concat (v_name, v)
-      let new_env: P_state := (new_var_map, (funcs c_env))
-      set { state with current := {state.current with env := new_env, prog := p} }
-      eval_local
-    | Option.none => return eval_res.waiting
-
-  | COMPUTE v e p => do
-    let evaluation := eval_Exp c_env e
-    match evaluation with
-    | Exp_RESULT.some r =>
-      let new_var_map: List (Variable × Nat) := (var_map c_env).concat (v, r)
-      let new_env: P_state := (new_var_map, (funcs c_env))
-      set { state with current := {state.current with env := new_env, prog := p} }
-      eval_local
-    | x => throw (eval_error.Exp_error x)
-
-  | END res_Exp_opt =>
-    match res_Exp_opt with
-    | Option.some res_Exp => do
-      let state <- get
-      let evaluation := eval_Exp state.current.env res_Exp
-      match evaluation with
-      | Exp_RESULT.some r =>
-        return eval_res.finished r
-      | x => throw (eval_error.Exp_error x)
-    | Option.none => do
-      let state <- get
-      let swap_state_opt := swap_running_program state
-      match swap_state_opt with
-      | Option.some swap_state =>
-        set swap_state
-        eval_local
-      | Option.none => throw eval_error.deadlock
-
---/
-
-def activate (s: state): state :=
-  let active_progs := s.progs.map (fun x => {x with status := eval_state.ready})
+--
+def activate (s: group_eval_state): group_eval_state :=
+  let active_progs := s.progs.map (fun x => {x with status :=
+    match x.status with
+    | eval_status.finished r =>  eval_status.finished r
+    | x => x
+    })
   {s with progs := active_progs}
 
 def send_to_all (locs: List Location) (b: BranchChoice) (p: L.P): L.P :=
@@ -282,8 +204,7 @@ def send_to_all (locs: List Location) (b: BranchChoice) (p: L.P): L.P :=
   | [] => L.P.NOOP p
   | x::xs => L.P.SEND_LBL b x (send_to_all xs b p)
 
-
-def eval_local (s: state): ExceptT eval_error (StateM trace) (List (located Nat)) := do
+partial def eval_local (s: group_eval_state): ExceptT eval_error (StateM trace) (List (located Nat)) := do
   set ((<-get) ++ [s])
 
   let running_program := s.current.prog
@@ -297,7 +218,7 @@ def eval_local (s: state): ExceptT eval_error (StateM trace) (List (located Nat)
       match evaluation with
       | Exp_RESULT.some r =>
         let broadcast_msgs: List lbl_msg := s.progs.map (fun x => ((s.current.loc, x.loc), if r == 0 then BranchChoice.fst else BranchChoice.snd))
-        let new_state: state := activate { s with l_msgs := s.l_msgs ++ broadcast_msgs, current := {s.current with prog := if r == 0 then opt_a else opt_b},}
+        let new_state: group_eval_state := activate { s with l_msgs := s.l_msgs ++ broadcast_msgs, current := {s.current with prog := if r == 0 then opt_a else opt_b},}
         eval_local new_state
       | x => throw (eval_error.Exp_error x)
 
@@ -308,7 +229,7 @@ def eval_local (s: state): ExceptT eval_error (StateM trace) (List (located Nat)
     | Exp_RESULT.some r =>
       let new_message: msg := (((s.current.loc, receiver), v), r)
       let new_state := { s with messages := s.messages.cons new_message, current := {s.current with prog := p}}
-      set ((<-get) ++ [new_state])
+      --set ((<-get) ++ [new_state])
       eval_local new_state
     | x => throw (eval_error.Exp_error x)
 
@@ -322,12 +243,11 @@ def eval_local (s: state): ExceptT eval_error (StateM trace) (List (located Nat)
       let new_state := { s with current := {s.current with env := new_env, prog := p}, messages:= s.messages.erase (awaited_msg, v) }
       eval_local new_state
     | Option.none =>
-      let swap_state_opt := swap_running_program s
+      let swap_state_opt := block_current s
       match swap_state_opt with
       | Option.some swap_state =>
         eval_local swap_state
       | Option.none =>
-        set ((<-get) ++ [s])
         throw eval_error.deadlock
   | COMPUTE v e p => do
     let evaluation := eval_Exp c_env e
@@ -346,7 +266,7 @@ def eval_local (s: state): ExceptT eval_error (StateM trace) (List (located Nat)
     | Exp_RESULT.some r =>
       let located_res := (r, s.current.loc)
       let s := {s with results := s.results.concat located_res}
-      let swap_state_opt := swap_running_program s
+      let swap_state_opt := finish_current s r
       match swap_state_opt with
       | Option.some swap_state =>
         eval_local swap_state
@@ -370,6 +290,7 @@ def eval_local (s: state): ExceptT eval_error (StateM trace) (List (located Nat)
 
     | Option.none => throw eval_error.deadlock
 
+
 def lp_1_sending: P := P.SEND (Exp.VAR "var1") "var1" "server" (boring_end)
 
 
@@ -379,10 +300,10 @@ def lp_2_receiving: P := P.RECV "var1" "client"
 
 def l_env_1: P_state := ([("var1", 101)], [])
 
-def lstate_1_send: local_state := { loc := "client", env := l_env_1, prog:= lp_1_sending }
-def lstate_1_receive: local_state := { loc := "server", env := empty_P_state, prog:= lp_2_receiving }
+def lstate_1_send: eval_state := { loc := "client", env := l_env_1, prog:= lp_1_sending }
+def lstate_1_receive: eval_state := { loc := "server", env := empty_P_state, prog:= lp_2_receiving }
 
-def state_of (starter: local_state) (others: List local_state): state :={
+def state_of (starter: eval_state) (others: List eval_state): group_eval_state :={
   results:= []
   messages:= [],
   l_msgs:=   [],
@@ -390,11 +311,11 @@ def state_of (starter: local_state) (others: List local_state): state :={
   current := starter
 }
 
-def state_1_send_then_receive: state :=
+def state_1_send_then_receive: group_eval_state :=
   state_of lstate_1_send [(lstate_1_receive)]
 
 
-def state_2_only_receive: state :=
+def state_2_only_receive: group_eval_state :=
   state_of lstate_1_receive []
 
 #eval (lp_1_sending)
