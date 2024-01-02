@@ -47,6 +47,20 @@
 %	logofile=example-image, %Falls die Logo Dateien nicht vorliegen
 ]{tudapub}
 
+% Meine Packete
+\usepackage{syntax}
+\renewcommand{\syntleft}{}
+\renewcommand{\syntright}{}
+\usepackage{listings}
+\def\lstlanguagefiles{lstlean.tex}
+
+\usepackage{color}
+\definecolor{keywordcolor}{rgb}{0.7, 0.1, 0.1}   % red
+\definecolor{tacticcolor}{rgb}{0.0, 0.1, 0.6}    % blue
+\definecolor{commentcolor}{rgb}{0.4, 0.4, 0.4}   % grey
+\definecolor{symbolcolor}{rgb}{0.0, 0.1, 0.6}    % blue
+\definecolor{sortcolor}{rgb}{0.1, 0.5, 0.1}      % green
+\definecolor{attributecolor}{rgb}{0.7, 0.1, 0.1} % red
 
 % Der folgende Block ist nur bei pdfTeX auf Versionen vor April 2018 notwendig
 \usepackage{iftex}
@@ -150,10 +164,86 @@
 (clarify the use of Agent, nodes, locations and be consistent throughout the thesis.)
 Literature uses different kinds of naming conventions for talking about communication paricipants, sometimes to express a slightly different intent that share semantically the same properties. I will stick to location throughout my work, in other work you might read terms like nodes, parties, Agents. The paper also presents several extensions (... maybe add whats important)
 
+Lamda Calculus and Pi Calculus
+dont need seperate sections i think
 
 \section{Sessions and Session Types:
 an Overview}
 Session Types take an important role for Choreos and describe the interaction of two (binary) or more (multi party) locations at communication level. We differentiate between \textbf{Global Session Types} that describe the sequence of directed message exchange for a session, and \textbf{Local Session Types}, which reflect the same Protocol but from one locations's perspective. The projection from a global session type to a local ST is called \textbf{End Point Projection} and basicallay translates all sending operations to send operations if location being projected to is sending, or receive operations if is receiving.
+
+\section{MultiParty Session Types}
+
+
+Essential Session Type Syntax introduced by K. Honda in the 1990
+
+\begin{grammar}
+
+<T> ::= end
+	\alt !S.S' -- Send
+	\alt ?S.S' -- Receive
+
+\end{grammar}
+
+\begin{grammar}
+<G> ::= end
+	\alt \mu t. G
+	\alt t
+	\alt p \rightarrow q: $\{l_i(S_i).G_i\}_{i \in I}$
+
+\end{grammar}
+
+
+Syntax of Introduction to MPST
+
+\begin{grammar}
+
+<S> ::= nat
+	\alt int
+	\alt bool
+
+\end{grammar}
+
+\begin{grammar}
+
+<T> ::= end
+	\alt $ \&_{i \in I} p?l_i(S_i).T_i$
+	\alt $\oplus _{i \in I} q!l_i(S_i).T_i$
+	\alt \mu t.T
+	\alt t
+
+\end{grammar}
+
+Syntax of Mira / TU Darmstadt
+extends the previous Global Type Syntax by the following:
+\begin{grammar}
+
+<G> ::= [b]G
+	\alt G|G
+	\alt G+G
+	\alt \prod x:I.G
+	\alt G e
+
+\end{grammar}
+
+Extension to Local Types
+\begin{grammar}
+
+<T> ::= [b]T
+	\alt T+T
+	\alt \prod x:I.T
+	\alt T e
+
+\end{grammar}
+
+Global Type Implementation in Lean4
+
+\begin{lstlisting}[language=lean]
+inductive P where
+  | IF 			: located Exp -> P -> P -> P
+  | SEND_RECV   : located Exp -> located Variable -> P -> P
+  | COMPUTE (v: Variable) (e: Exp) (a: Location) :   P -> P
+  | END     	: Exp -> Location -> P
+\end{lstlisting}
 
 \section{HasChor: Functional Choreographic Programming for All
 (Functional Pearl)}

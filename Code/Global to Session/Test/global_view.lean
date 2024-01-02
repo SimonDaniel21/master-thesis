@@ -5,11 +5,9 @@ import Test.my_utils
 import Test.my_logs
 import Test.local_view
 
-
 namespace G
 
   open Lean
-
 
   inductive P where
   | IF : located Exp -> P -> P -> P
@@ -17,13 +15,10 @@ namespace G
   | COMPUTE (v: Variable) (e: Exp) (a: Location) :   P -> P
   | END     : Exp -> Location -> P
 
-  inductive MyType where
-  | nat   : MyType
-
 
   inductive T where
   --| IF : Location -> T -> T -> T -> T
-  | SEND_RECV   : Location -> Location -> MyType -> T -> T
+  | SEND_RECV   : Location -> Location -> Sorts -> T -> T
   | BRANCH      : Location -> T -> T -> T
   | END     :   T
 
@@ -48,7 +43,7 @@ def Type_Locations: T -> List Location
 
 def GLOBAL_TO_TYPE: P -> T
 | IF (_e, el) opt_a opt_b =>  T.BRANCH el (GLOBAL_TO_TYPE opt_a) (GLOBAL_TO_TYPE opt_b)
-| SEND_RECV (_e, sender) (_v, receiver) p => T.SEND_RECV sender receiver MyType.nat (GLOBAL_TO_TYPE p)
+| SEND_RECV (_e, sender) (_v, receiver) p => T.SEND_RECV sender receiver Sorts.nat (GLOBAL_TO_TYPE p)
 | COMPUTE _ _ _ p => (GLOBAL_TO_TYPE p)
 | END _ _ => T.END
 
@@ -65,8 +60,6 @@ def GP_TO_STRING (i: Nat) (p: P):  String :=
   | COMPUTE v e l p => v ++  "@" ++ l ++ " <= " ++ (Exp_TO_STRING e) ++ " @" ++ l ++ "\n" ++ (GP_TO_STRING i p)
   leading_spaces ++ content
 
- def MyType_TO_STRING (i: Nat) (t: MyType): String := match t with
-| MyType.nat => "Nat"
 
 def GT_TO_STRING (i: Nat) (t: T): String :=
   let leading_spaces := repeat_string "  " i
@@ -77,7 +70,7 @@ def GT_TO_STRING (i: Nat) (t: T): String :=
     chooser ++ "--> ("  ++ (list_to_string_seperated_by observer ",") ++ "):" ++ nl ++ "{ fst:" ++ nl ++ GT_TO_STRING (i+2) t1 ++ nl ++ "[]snd: "
       ++ nl ++ GT_TO_STRING (i+2) t2 ++ nl ++ "}" ++ "\n"
   | T.SEND_RECV sender receiver t p =>
-    sender ++ " --> " ++  receiver ++  ": " ++ MyType_TO_STRING i t ++ ".\n" ++ (GT_TO_STRING i p)
+    sender ++ " --> " ++  receiver ++  ": " ++ toString t ++ ".\n" ++ (GT_TO_STRING i p)
   | T.END => "end"
   leading_spaces ++ content
 
@@ -291,7 +284,7 @@ def test_program_2: P := SEND_RECV ((Exp.VAR "var1"), "var1") ("client", "server
 def trade_accept: P := (SEND_RECV ((Exp.FUNC  "delivery_date_of" (Exp.VAR "requested_title")), "seller") ("delivery_date", "buyer")
   (END (Exp.VAR "delivery_date") "seller"))
 
-def trade_decline: P :=  (END (Exp.CONSTANT 33) "buyer" )
+def trade_decline: P :=  (END (Exp.CONSTANT 0) "buyer" )
 
 def buyer_seller: P := SEND_RECV ((Exp.VAR "title"), "buyer") ("requested_title", "seller")
   (SEND_RECV (Exp.FUNC "price_of" ((Exp.VAR "requested_title")), "seller") ("price", "buyer")
@@ -307,6 +300,7 @@ def buyer_seller_type := GLOBAL_TO_TYPE buyer_seller
 
 #eval buyer_seller_type
 
+
 #eval (buyer_seller_type)
 
 
@@ -317,28 +311,28 @@ def buyer_seller_type := GLOBAL_TO_TYPE buyer_seller
 
 
 def buyer_local_program: L.P := EPP_P buyer_seller "buyer"
-def buyer_local_state: L.local_state := { loc := "buyer", env := l_test_Env1, prog:= buyer_local_program }
+def buyer_local_state: L.eval_state := { loc := "buyer", env := l_test_Env1, prog:= buyer_local_program }
 
 def seller_local_program: L.P := EPP_P buyer_seller "seller"
-def seller_local_state: L.local_state := { loc := "seller", env := l_test_Env2, prog:= seller_local_program }
+def seller_local_state: L.eval_state := { loc := "seller", env := l_test_Env2, prog:= seller_local_program }
 
 #eval (LOCAL_TO_TYPE buyer_local_program)
 #eval (LOCAL_TO_TYPE seller_local_program)
 
 
-def state_3_only_buyer: L.state := state_of buyer_local_state []
+def state_3_only_buyer: L.group_eval_state := state_of buyer_local_state []
 
 
 #eval (eval_local state_3_only_buyer [])
 
 
 
-def state_4_buyer_seller: L.state := state_of seller_local_state [buyer_local_state]
+def state_4_buyer_seller: L.group_eval_state := state_of seller_local_state [buyer_local_state]
 
 #eval state_4_buyer_seller
 #eval swap_running_program state_4_buyer_seller
 
 #eval (buyer_local_program)
 #eval (seller_local_program)
-#eval (EPP_P buyer_seller "buyer")
+#eval (EPP_P buyer_seller "seller")
 #eval (eval_local state_4_buyer_seller [])

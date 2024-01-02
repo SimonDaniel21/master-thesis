@@ -1,35 +1,199 @@
 import Test.type
 
+inductive Bop where
+| EQUAL: Bop
+| NOT: Bop
+| AND: Bop
+| SMALLER: Bop
+deriving BEq
+
+-- inductive Exp where
+-- | VAR (v: Variable) :Exp
+-- | FUNC (f: Function) : Exp -> Exp
+-- | CONSTANT (n: Nat) :Exp
+-- | DIVIDE: Exp -> Exp -> Exp
+-- | MULTIPLY: Exp -> Exp -> Exp
+-- | PLUS: Exp -> Exp -> Exp
+-- | MINUS: Exp -> Exp -> Exp
+-- | SMALLER: Exp -> Exp -> Exp
+-- | EQUALS: Exp -> Exp -> Exp
+-- --| BinExp: Bop -> Exp
+-- deriving BEq
+
+inductive BExp where
+| not: BExp -> BExp
+| and: BExp -> BExp -> BExp
+| const: Bool -> BExp
+| var: Variable -> BExp
+deriving BEq
+
+inductive NExp where
+| plus: NExp -> NExp -> NExp
+| minus: NExp -> NExp -> NExp
+| multiply: NExp -> NExp -> NExp
+| divide: NExp -> NExp -> NExp
+| const: Nat -> NExp
+| var: Variable -> NExp
+deriving BEq
+
+inductive SExp where
+| concat: SExp -> SExp -> SExp
+| const: String -> SExp
+| var: Variable -> SExp
+deriving BEq
+
 inductive Exp where
-  | VAR (v: Variable) :Exp
-  | FUNC (f: Function) : Exp -> Exp
-  | CONSTANT (n: Nat) :Exp
-  | DIVIDE: Exp -> Exp -> Exp
-  | MULTIPLY: Exp -> Exp -> Exp
-  | PLUS: Exp -> Exp -> Exp
-  | MINUS: Exp -> Exp -> Exp
-  | SMALLER: Exp -> Exp -> Exp
-  | EQUALS: Exp -> Exp -> Exp
+| nexp (e: NExp): Exp
+| bexp (e: BExp): Exp
+| sexp (e: SExp): Exp
+
 deriving BEq
 
 open Exp
 
-def Exp_TO_STRING: Exp -> String
-  | FUNC f e => f ++ "(" ++ Exp_TO_STRING e ++ ")"
-  | VAR n => n
-  | CONSTANT n => s!"{n}"
-  | DIVIDE a b => "(" ++ (Exp_TO_STRING a) ++ " / " ++ (Exp_TO_STRING b) ++ ")"
-  | MULTIPLY a b => "(" ++ (Exp_TO_STRING a) ++ " x " ++ (Exp_TO_STRING b) ++ ")"
-  | PLUS a b => "(" ++ (Exp_TO_STRING a) ++ " + " ++ (Exp_TO_STRING b) ++ ")"
-  | MINUS a b => "(" ++ (Exp_TO_STRING a) ++ " - " ++ (Exp_TO_STRING b) ++ ")"
-  | SMALLER a b => "(" ++ (Exp_TO_STRING a) ++ " < " ++ (Exp_TO_STRING b) ++ ")"
-  | EQUALS a b => "(" ++ (Exp_TO_STRING a) ++ " == " ++ (Exp_TO_STRING b) ++ ")"
+inductive exp_error where
+| wrong_type (got expected:Sorts) : exp_error
+| unknown_var (name: Variable) : exp_error
+| division_by_zero
+
+def exp_res := Except exp_error Value
+
+
+abbrev P_state := (List (Variable × Value)) ×  (List (Function × (Nat -> Nat)))
+
+def P_state.var_map (env: P_state) := env.fst
+
+def P_state.funcs (env: P_state) := env.snd
+
+def eval_NExp (env: P_state): NExp -> exp_res
+| .plus a b => do
+  let val_a <- eval_NExp a
+  let val_b <- eval_NExp b
+  match val_a with
+  | Value.nat n1 =>
+    match val_b with
+    | Value.nat n2 =>
+      return Value.nat (n1-n2)
+    | x => throw (exp_error.wrong_type x.denote Sorts.nat)
+  | x => throw (exp_error.wrong_type x.denote Sorts.nat)
+| .minus a b => do
+  let val_a <- eval_NExp a
+  let val_b <- eval_NExp b
+  match val_a with
+  | Value.nat n1 =>
+    match val_b with
+    | Value.nat n2 =>
+      return Value.nat (n1-n2)
+    | x => throw (exp_error.wrong_type x.denote Sorts.nat)
+  | x => throw (exp_error.wrong_type x.denote Sorts.nat)
+| .multiply a b => do
+  let val_a <- eval_NExp a
+  let val_b <- eval_NExp b
+  match val_a with
+  | Value.nat n1 =>
+    match val_b with
+    | Value.nat n2 =>
+      return Value.nat (n1*n2)
+    | x => throw (exp_error.wrong_type x.denote Sorts.nat)
+  | x => throw (exp_error.wrong_type x.denote Sorts.nat)
+| .divide a b => do
+  let val_a <- eval_NExp a
+  let val_b <- eval_NExp b
+  match val_a with
+  | Value.nat n1 =>
+    match val_b with
+    | Value.nat n2 =>
+      if n2 == 0 then
+        throw (exp_error.division_by_zero)
+      else
+        return Value.nat (n1/n2)
+    | x => throw (exp_error.wrong_type x.denote Sorts.nat)
+  | x => throw (exp_error.wrong_type x.denote Sorts.nat)
+
+| .const n => do
+  return Value.nat n
+| .var v =>
+  let var_value_opt := (env.var_map).lookup v
+  match var_value_opt with
+  | Option.none => throw (exp_error.unknown_var v)
+  | Option.some var_value => match var_value with
+    | .nat _  => return var_value
+    | x => throw (exp_error.wrong_type x.denote Sorts.nat)
+
+def eval_BExp (e: BExp): exp_res := match e with
+| .and a b => do
+  let val_a <- eval_BExp a
+  let val_b <- eval_BExp b
+  match val_a with
+  | Value.bool b1 =>
+    match val_b with
+    | Value.bool b2 =>
+      return Value.bool (b1 && b2)
+    | x => throw (exp_error.wrong_type x.denote Sorts.bool)
+  | x => throw (exp_error.wrong_type x.denote Sorts.bool)
+| .not b => do
+  let val <- eval_BExp b
+  match val with
+  | Value.bool val_b =>
+    return Value.bool !val_b
+  | x => throw (exp_error.wrong_type x.denote Sorts.bool)
+| .const b => do
+  return Value.bool b
+
+def eval_SExp (e: SExp): exp_res := match e with
+| .concat a b => do
+  let val_a <- eval_SExp a
+  let val_b <- eval_SExp b
+  match val_a with
+  | Value.string s1 =>
+    match val_b with
+    | Value.string s2 =>
+      return Value.string (s1 ++ s2)
+    | x => throw (exp_error.wrong_type x.denote Sorts.string)
+  | x => throw (exp_error.wrong_type x.denote Sorts.string)
+| .const s => do
+  return Value.string s
+| .var v =>
+  let var_value_opt := (env.var_map).lookup v
+  match var_value_opt with
+  | Option.none => throw (exp_error.unknown_var v)
+  | Option.some var_value => match var_value with
+    | .string _  => return var_value
+    | x => throw (exp_error.wrong_type x.denote Sorts.nat)
 
 
 
 
-instance: ToString Exp where
-  toString := Exp_TO_STRING
+def eval_exp (env: P_state): Exp -> exp_res
+| Exp.nexp e => eval_NExp e
+| Exp.bexp e => eval_BExp e
+| Exp.sexp e => eval_SExp e
+
+
+
+
+instance: ToString (exp_error) where
+  toString (e: exp_error) := match e with
+    | exp_error.division_by_zero => "Division by zero "
+    | exp_error.wrong_type t1 t2 => "expected " ++ toString t1 ++ " but got " ++ toString t2
+    | exp_error.unknown_var name => "Exp contains unknown var: " ++ name
+
+-- def Exp_TO_STRING: Exp -> String
+-- | FUNC f e => f ++ "(" ++ Exp_TO_STRING e ++ ")"
+-- | VAR n => n
+-- | CONSTANT n => s!"{n}"
+-- | DIVIDE a b => "(" ++ (Exp_TO_STRING a) ++ " / " ++ (Exp_TO_STRING b) ++ ")"
+-- | MULTIPLY a b => "(" ++ (Exp_TO_STRING a) ++ " x " ++ (Exp_TO_STRING b) ++ ")"
+-- | PLUS a b => "(" ++ (Exp_TO_STRING a) ++ " + " ++ (Exp_TO_STRING b) ++ ")"
+-- | MINUS a b => "(" ++ (Exp_TO_STRING a) ++ " - " ++ (Exp_TO_STRING b) ++ ")"
+-- | SMALLER a b => "(" ++ (Exp_TO_STRING a) ++ " < " ++ (Exp_TO_STRING b) ++ ")"
+-- | EQUALS a b => "(" ++ (Exp_TO_STRING a) ++ " == " ++ (Exp_TO_STRING b) ++ ")"
+
+
+
+
+-- instance: ToString Exp where
+--   toString := Exp_TO_STRING
 
 open Exp
 
@@ -64,7 +228,6 @@ instance: ToString (Exp_RESULT Nat) where
     | Exp_RESULT.UNKNOWN_FUNC name => "Exp contains unknown function: " ++ name
     | Exp_RESULT.DIV_BY_ZERO => "Division by zero "
 
-abbrev P_state := (List (Variable × Nat)) ×  (List (Function × (Nat -> Nat)))
 
 
 def test_list: List (String × String) := [("a", "eins"),  ("b", "zwei")]
@@ -76,19 +239,14 @@ def test_type := Nat × Nat
 
 def test_v : test_type := (2,3)
 
-def var_map (env: P_state): (List (Variable × Nat)) :=
-  env.fst
 
-def funcs (env: P_state): (List (Function × (Nat -> Nat))) :=
-  env.snd
-
-def var_map_to_string (v: List (Variable × Nat)):  String :=
+def var_map_to_string (v: List (Variable × Value)):  String :=
   match v with
   | List.cons (v_name, v_value) rest => v_name ++ "->" ++ toString v_value ++ ", " ++ var_map_to_string rest
   | List.nil => ""
 
 def P_state_to_string (env: P_state):  String :=
-  var_map_to_string (var_map env)
+  var_map_to_string (env.var_map)
 
 def empty_P_state : P_state := ([],[])
 
@@ -98,72 +256,72 @@ instance: ToString P_state where
 
 #check (List (Nat × Nat))
 --def eval_Exp (var_map: List (Variable × Nat)): Exp -> Exp_RESULT (Nat × List SYMBOL)
-def eval_Exp (env: P_state) : Exp -> Exp_RESULT Nat
-  | Exp.VAR n =>
-    let var_value := (var_map env).lookup n
-    if (var_value == Option.none) then
-      Exp_RESULT.UNKNOWN_VAR n
-    else
-      Exp_RESULT.some var_value.get!
+-- def eval_Exp (env: P_state) : Exp -> Exp_RESULT Nat
+--   | Exp.VAR n =>
+--     let var_value := (var_map env).lookup n
+--     if (var_value == Option.none) then
+--       Exp_RESULT.UNKNOWN_VAR n
+--     else
+--       Exp_RESULT.some var_value.get!
 
-  | Exp.FUNC name argument  =>
-    let func_opt := (funcs env).lookup name
-    match func_opt with
-    | Option.some func =>
-      do
-      let v_a <- eval_Exp env argument
-      Exp_RESULT.some (func v_a)
+--   | Exp.FUNC name argument  =>
+--     let func_opt := (funcs env).lookup name
+--     match func_opt with
+--     | Option.some func =>
+--       do
+--       let v_a <- eval_Exp env argument
+--       Exp_RESULT.some (func v_a)
 
-    | Option.none => Exp_RESULT.UNKNOWN_FUNC name
+--     | Option.none => Exp_RESULT.UNKNOWN_FUNC name
 
-  | Exp.CONSTANT n => Exp_RESULT.some n
+--   | Exp.CONSTANT n => Exp_RESULT.some n
 
-  | Exp.DIVIDE e_a e_b =>
-    do
-    let v_a <- eval_Exp env e_a
-    let v_b <- eval_Exp env e_b
+--   | Exp.DIVIDE e_a e_b =>
+--     do
+--     let v_a <- eval_Exp env e_a
+--     let v_b <- eval_Exp env e_b
 
-    if ( v_b == 0) then
-      Exp_RESULT.DIV_BY_ZERO
-    else
-      Exp_RESULT.some (v_a / v_b)
+--     if ( v_b == 0) then
+--       Exp_RESULT.DIV_BY_ZERO
+--     else
+--       Exp_RESULT.some (v_a / v_b)
 
-  | Exp.MULTIPLY e_a e_b =>
-    do
-    let v_a <- eval_Exp env e_a
-    let v_b <- eval_Exp env e_b
-    Exp_RESULT.some (v_a * v_b)
+--   | Exp.MULTIPLY e_a e_b =>
+--     do
+--     let v_a <- eval_Exp env e_a
+--     let v_b <- eval_Exp env e_b
+--     Exp_RESULT.some (v_a * v_b)
 
 
-  | Exp.PLUS e_a e_b =>
-    do
-    let v_a <- eval_Exp env e_a
-    let v_b <- eval_Exp env e_b
-    Exp_RESULT.some (v_a + v_b)
+--   | Exp.PLUS e_a e_b =>
+--     do
+--     let v_a <- eval_Exp env e_a
+--     let v_b <- eval_Exp env e_b
+--     Exp_RESULT.some (v_a + v_b)
 
-  | Exp.MINUS e_a e_b =>
-    do
-    let v_a <- eval_Exp env e_a
-    let v_b <- eval_Exp env e_b
-    Exp_RESULT.some (v_a - v_b)
+--   | Exp.MINUS e_a e_b =>
+--     do
+--     let v_a <- eval_Exp env e_a
+--     let v_b <- eval_Exp env e_b
+--     Exp_RESULT.some (v_a - v_b)
 
-  | Exp.SMALLER e_a e_b =>
-    do
-    let v_a <- eval_Exp env e_a
-    let v_b <- eval_Exp env e_b
-    if v_a < v_b then
-      Exp_RESULT.some 1
-    else
-      Exp_RESULT.some 0
+--   | Exp.SMALLER e_a e_b =>
+--     do
+--     let v_a <- eval_Exp env e_a
+--     let v_b <- eval_Exp env e_b
+--     if v_a < v_b then
+--       Exp_RESULT.some 1
+--     else
+--       Exp_RESULT.some 0
 
-  | Exp.EQUALS e_a e_b =>
-    do
-    let v_a <- eval_Exp env e_a
-    let v_b <- eval_Exp env e_b
-    if v_a == v_b then
-      Exp_RESULT.some 1
-    else
-      Exp_RESULT.some 0
+--   | Exp.EQUALS e_a e_b =>
+--     do
+--     let v_a <- eval_Exp env e_a
+--     let v_b <- eval_Exp env e_b
+--     if v_a == v_b then
+--       Exp_RESULT.some 1
+--     else
+--       Exp_RESULT.some 0
 
 
 
@@ -174,7 +332,7 @@ def eval_Exp (env: P_state) : Exp -> Exp_RESULT Nat
 --                 TYPED_Exp GAMMA (Exp.PLUS e1 e2) nat
 
 
-def vars: List (Variable × Nat) := [("v1", 3)]
+def vars: List (Variable × Value) := [("v1", Value.nat 3)]
 
 def add_one (v: Nat): Nat :=
   v+1
@@ -185,9 +343,9 @@ def test_env : P_state := (vars, [("add_one", add_one )])
 #eval vars
 
 
-def e_1: Exp := Exp.MULTIPLY (Exp.PLUS (Exp.CONSTANT 3) (Exp.CONSTANT 34)) (Exp.CONSTANT 2)
-def e_2_nan: Exp := Exp.MULTIPLY (Exp.CONSTANT 2) (Exp.DIVIDE (Exp.CONSTANT 3) (Exp.CONSTANT 0))
-def e_3_unknown: Exp := Exp.MULTIPLY (Exp.VAR "v_unknown") (Exp.DIVIDE (Exp.CONSTANT 3) (Exp.CONSTANT 0))
+def e_1: Exp := Exp.nexp (NExp.multiply (NExp.plus (NExp.const 3) (NExp.const 34)) (NExp.const 2))
+def e_2_nan: Exp := Exp.nexp (NExp.multiply (NExp.const 2) (NExp.divide (NExp.const 3) (NExp.const 0)))
+def e_3_unknown: Exp := Exp.nexp (NExp.multiply (Exp.var "v_unknown") (Exp.DIVIDE (Exp.CONSTANT 3) (Exp.CONSTANT 0)))
 def e_4_var: Exp := Exp.MINUS (Exp.VAR "v1") (Exp.DIVIDE (Exp.CONSTANT 4) (Exp.CONSTANT 2))
 def e_5_var_and_func: Exp := Exp.MINUS (Exp.VAR "v1") (Exp.FUNC "add_one" (Exp.CONSTANT 1))
 

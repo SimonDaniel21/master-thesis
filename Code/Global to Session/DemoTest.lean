@@ -1,3 +1,4 @@
+import Socket
 -- TASK --
 inductive DSL where
   | CONSTANT (n: Nat) :DSL
@@ -64,6 +65,10 @@ open Ty (nat fn)
 def add: Term (fn nat (fn nat nat)) :=
   Term'.lam fun x => Term'.lam fun y => Term'.plus (Term'.var x) (Term'.var y)
 
+--def add_toString: Term (fn nat (fn nat string)) :=
+--  Term'.lam fun x => Term'.lam fun y => (Term'.plus (Term'.var x) (Term'.var y))
+
+
 
 def three_test: Term nat :=
   Term'.app (Term'.app add (Term'.nat_const 1)) (Term'.nat_const 4)
@@ -106,3 +111,57 @@ def length? {α : Type} (xs : List α) : Nat :=
   | y :: ys => 1 + (length? ys)
 
 #eval length? [1,2,3,45,56]
+
+
+def addr : Socket.SockAddr4 := .v4 (.mk 127 0 0 1) 8889
+
+def Socket.sendStr (sock: Socket) (msg: String): IO Unit := do
+  let bytes := msg.toUTF8
+  let sz ← sock.send bytes
+  IO.println s!"sent: {msg}"
+  assert! sz == bytes.size.toUSize
+
+def Socket.recvStr (sock: Socket) (max: USize := 4096): IO String := do
+  let recv ← sock.recv max
+  if recv.size == 0 then return ""
+  let str := String.fromUTF8Unchecked recv
+  IO.println s!"recv: {str}"
+  return str
+
+def client (arg : String) : IO Unit := do
+  let sock ← Socket.mk .inet .stream
+  sock.connect addr
+  sock.sendStr arg
+  let resp ← sock.recvStr
+
+def handle (sock : Socket) : IO Unit := do
+  IO.println "handler start"
+  let msg ← sock.recvStr
+  let resp ← sock.sendStr s!"response to {msg}"
+  IO.println "handler done"
+
+def serverloop : IO Unit := do
+  let sock ← Socket.mk .inet .stream
+  sock.bind addr
+  sock.listen 1
+  while true do
+    let (client, _sa) ← sock.accept
+    handle client
+  return ()
+
+def main (args : List String) : IO Unit := do
+  let mode := args.get! 0
+  if mode == "client" then
+    client <| args.get! 1
+  else if mode == "server" then
+    serverloop
+  else
+    IO.println "Unknown mode"
+    return ()
+
+def client2: IO Nat := do
+  let sock ← Socket.mk .inet .stream
+  let local_addr: Socket.SockAddr4 := .v4 (.mk 127 0 0 1) 4599
+  sock.connect local_addr
+
+  return 0

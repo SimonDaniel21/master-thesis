@@ -8,6 +8,10 @@
 
 @[reducible] def located (α: Type): Type := α × Location
 
+
+instance {α} [ToString α]: ToString (located α) where
+  toString := fun x => (toString x.fst) ++ "@" ++ x.snd
+
 inductive BranchChoice: Type
 | fst
 | snd
@@ -30,3 +34,31 @@ inductive Ty : Type
 inductive MyNat where
 | nat: Nat -> MyNat
 | nan: MyNat
+
+inductive Sorts where
+| nat   : Sorts
+| string: Sorts
+| bool  : Sorts
+
+inductive Value where
+| nat   : Nat -> Value
+| string: String -> Value
+| bool  : Bool -> Value
+
+def Value.denote (v: Value) : Sorts := match v with
+| .nat _ => .nat
+| .string _ => .string
+| .bool _ => .bool
+
+
+instance: ToString Sorts where
+  toString := fun x => match x with
+  | .nat => "Nat"
+  | .bool => "Bool"
+  | .string => "string"
+
+instance: ToString Value where
+  toString := fun x => match x with
+  | .nat x => toString x
+  | .bool x => toString x
+  | .string x => toString x

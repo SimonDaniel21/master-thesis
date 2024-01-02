@@ -3,6 +3,7 @@ import Test.location
 import Test.expression
 import Test.my_logs
 import Test.my_utils
+import Socket
 
 namespace L
 
@@ -18,11 +19,11 @@ namespace L
 
 
   inductive T where
-  | IF        :  T -> T -> T
+  | IF        :  T -> T -> T              -- Internal Choice
   | SEND      :  Location -> T -> T
   | RECV      :  Location -> T -> T
   | SEND_LBL  :  Location -> BranchChoice -> T -> T
-  | BRANCH_ON :  Location -> T -> T -> T  -- corresponds to cond in HasChor
+  | BRANCH_ON :  Location -> T -> T -> T  -- corresponds to External Choice
   | END       :  T
 
   def boring_end := P.END (Exp.CONSTANT 0)
@@ -103,7 +104,7 @@ def LP_TO_STRING_single(i: Nat) (p: P): String :=
   | BRANCH_ON decider opt_a opt_b => "choice@" ++ decider ++ "\n" ++  LP_TO_STRING_single (i+1) opt_a ++ "\n[]\n" ++ LP_TO_STRING_single (i+1) opt_b
   | COMPUTE v e _p => v ++ " <= " ++ (Exp_TO_STRING e)
   | NOOP _p => ""
-  | END res => "RETURN " ++ toString res
+  | END res => "return " ++ toString res
   leading_spaces ++ content
 
 def LP_TO_STRING(i: Nat) (p: P): String :=
@@ -118,7 +119,7 @@ def LP_TO_STRING(i: Nat) (p: P): String :=
   | BRANCH_ON decider opt_a opt_b => "choice@" ++ decider ++ "\n" ++  LP_TO_STRING (i+1) opt_a ++ "\n[]\n" ++ LP_TO_STRING (i+1) opt_b
   | COMPUTE v e p => v ++ " <= " ++ (Exp_TO_STRING e) ++ "\n" ++ (LP_TO_STRING i p)
   | NOOP p => LP_TO_STRING i p
-  | END res => "RETURN " ++ toString res
+  | END res => "return " ++ toString res
   leading_spaces ++ content
 
 
@@ -160,11 +161,12 @@ instance: ToString L.eval_state where
 
 instance: ToString L.group_eval_state where
   toString := fun x =>
+    let other_progs := (x.progs.map (fun y => toString y.prog))
     let state_strings := list_to_string_seperated_by (x.progs.map (fun x => toString x))  "\n  "
-   "branch_messages:\n  " ++ toString x.l_msgs ++ "\nmessages:\n  " ++ toString x.messages ++ "\nstates:\n  " ++ toString x.current ++ "\n" ++ state_strings ++ "\nprogram@" ++ x.current.loc ++ ":\n " ++ LP_TO_STRING_single 0 x.current.prog
+   "branch_messages:\n  " ++ toString x.l_msgs ++ "\nmessages:\n  " ++ toString x.messages ++ "\nstates:\n  " ++ toString x.current ++ "\n  " ++ state_strings ++ "\nprogram@" ++ x.current.loc ++ ":\n " ++ LP_TO_STRING_single 0 x.current.prog ++ "\n" ++toString other_progs
 
 instance: ToString trace where
-  toString := fun x => list_to_string_seperated_by (x.map (fun y => toString y)) "\n-------------------\n"
+  toString := fun x => list_to_string_seperated_by (x.map (fun y => toString y)) "\n--------------------------------\n"
 
 instance: ToString (Except eval_error eval_status × group_eval_state) where
   toString := fun x => match x.fst with
@@ -208,6 +210,7 @@ partial def eval_local (s: group_eval_state): ExceptT eval_error (StateM trace) 
   set ((<-get) ++ [s])
 
   let running_program := s.current.prog
+  dbg_trace toString running_program ++ "\n"
   let c_env := s.current.env
 
   match running_program with
@@ -229,8 +232,7 @@ partial def eval_local (s: group_eval_state): ExceptT eval_error (StateM trace) 
     | Exp_RESULT.some r =>
       let new_message: msg := (((s.current.loc, receiver), v), r)
       let new_state := { s with messages := s.messages.cons new_message, current := {s.current with prog := p}}
-      --set ((<-get) ++ [new_state])
-      eval_local new_state
+      eval_local (activate new_state)
     | x => throw (eval_error.Exp_error x)
 
   | RECV v_name sender p => do
@@ -303,6 +305,10 @@ def l_env_1: P_state := ([("var1", 101)], [])
 def lstate_1_send: eval_state := { loc := "client", env := l_env_1, prog:= lp_1_sending }
 def lstate_1_receive: eval_state := { loc := "server", env := empty_P_state, prog:= lp_2_receiving }
 
+
+def temp_prg: L.P := L.P.SEND (Exp.CONSTANT 3) "sa" "anywhere" (L.P.END (Exp.CONSTANT 3))
+def lstate_3_test: eval_state := { loc := "client", env := l_env_1, prog:= temp_prg}
+
 def state_of (starter: eval_state) (others: List eval_state): group_eval_state :={
   results:= []
   messages:= [],
@@ -312,16 +318,27 @@ def state_of (starter: eval_state) (others: List eval_state): group_eval_state :
 }
 
 def state_1_send_then_receive: group_eval_state :=
-  state_of lstate_1_send [(lstate_1_receive)]
+  state_of lstate_1_receive [(lstate_1_send)]
 
 
 def state_2_only_receive: group_eval_state :=
   state_of lstate_1_receive []
 
+def state_3_only_send: group_eval_state :=
+  state_of lstate_1_send []
+
+def test_state : group_eval_state := state_of lstate_3_test []
+
 #eval (lp_1_sending)
+#eval (lp_2_receiving)
+
+
 #eval (LOCAL_TO_TYPE lp_1_sending)
 #eval (eval_local state_1_send_then_receive [])
 
-#eval (lp_2_receiving)
 #eval (LOCAL_TO_TYPE lp_2_receiving)
 #eval (eval_local state_2_only_receive [])
+
+#eval (eval_local state_3_only_send [])
+
+#eval (eval_local test_state [])
