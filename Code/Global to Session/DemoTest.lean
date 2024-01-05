@@ -1,4 +1,5 @@
 import Socket
+import Test.type
 -- TASK --
 inductive DSL where
   | CONSTANT (n: Nat) :DSL
@@ -39,78 +40,78 @@ def eval2: DSL -> Option Nat
 
 --- Higher order Terms ---
 
-inductive Ty where
-| nat: Ty
-| string: Ty
-| fn: Ty -> Ty -> Ty
+-- inductive Ty where
+-- | nat: Ty
+-- | string: Ty
+-- | fn: Ty -> Ty -> Ty
 
-@[reducible] def Ty.denote: Ty -> Type
-| nat => Nat
-| string => String
-| fn a b => a.denote -> b.denote
+-- @[reducible] def Ty.denote: Ty -> Type
+-- | nat => Nat
+-- | string => String
+-- | fn a b => a.denote -> b.denote
 
-inductive Term' (rep: Ty -> Type): Ty -> Type
-  | var           : rep x -> Term' rep x
-  | nat_const     : Nat -> Term' rep Ty.nat
-  | string_const  : String -> Term' rep Ty.string
-  | plus          : Term' rep Ty.nat -> Term' rep Ty.nat -> Term' rep Ty.nat
-  | my_let           : Term' rep x -> (rep x -> Term' rep y) -> Term' rep y
-  | lam           : (rep x -> Term' rep y) -> Term' rep (Ty.fn x y)
-  | app           : Term' rep (Ty.fn x y) -> Term' rep x -> Term' rep y
+-- inductive Term' (rep: Ty -> Type): Ty -> Type
+--   | var           : rep x -> Term' rep x
+--   | nat_const     : Nat -> Term' rep Ty.nat
+--   | string_const  : String -> Term' rep Ty.string
+--   | plus          : Term' rep Ty.nat -> Term' rep Ty.nat -> Term' rep Ty.nat
+--   | my_let           : Term' rep x -> (rep x -> Term' rep y) -> Term' rep y
+--   | lam           : (rep x -> Term' rep y) -> Term' rep (Ty.fn x y)
+--   | app           : Term' rep (Ty.fn x y) -> Term' rep x -> Term' rep y
 
-def Term (ty: Ty) := {rep: Ty -> Type} -> Term' rep ty
+-- def Term (ty: Ty) := {rep: Ty -> Type} -> Term' rep ty
 
-open Ty (nat fn)
+-- open Ty (nat fn)
 
-def add: Term (fn nat (fn nat nat)) :=
-  Term'.lam fun x => Term'.lam fun y => Term'.plus (Term'.var x) (Term'.var y)
+-- def add: Term (fn nat (fn nat nat)) :=
+--   Term'.lam fun x => Term'.lam fun y => Term'.plus (Term'.var x) (Term'.var y)
 
---def add_toString: Term (fn nat (fn nat string)) :=
---  Term'.lam fun x => Term'.lam fun y => (Term'.plus (Term'.var x) (Term'.var y))
+-- --def add_toString: Term (fn nat (fn nat string)) :=
+-- --  Term'.lam fun x => Term'.lam fun y => (Term'.plus (Term'.var x) (Term'.var y))
 
 
 
-def three_test: Term nat :=
-  Term'.app (Term'.app add (Term'.nat_const 1)) (Term'.nat_const 4)
+-- def three_test: Term nat :=
+--   Term'.app (Term'.app add (Term'.nat_const 1)) (Term'.nat_const 4)
 
-#eval Nat.succ Nat.zero
-def countVars: Term' (fun _ => Unit) ty -> Nat
-  | .var _ => 1
-  | .nat_const _ => 0
-  | .string_const _ => 0
-  | .plus a b => countVars a + countVars b
-  | .app f a => countVars f + countVars a
-  | .lam b => countVars ( b ())
-  | .my_let a b => countVars a + countVars (b ())
+-- #eval Nat.succ Nat.zero
+-- def countVars: Term' (fun _ => Unit) ty -> Nat
+--   | .var _ => 1
+--   | .nat_const _ => 0
+--   | .string_const _ => 0
+--   | .plus a b => countVars a + countVars b
+--   | .app f a => countVars f + countVars a
+--   | .lam b => countVars ( b ())
+--   | .my_let a b => countVars a + countVars (b ())
 
-example : countVars add = 2 := rfl
+-- example : countVars add = 2 := rfl
 
-open Term'
+-- open Term'
 
-def pretty (e: Term' (fun _ => String) ty) (i: Nat := 1) : String :=
-  match e with
-  | .var s => s
-  | .nat_const n => toString n
-  | string_const s => s
-  | app f a => s!"({pretty f i} {pretty a i})"
-  | plus a b => s!"({pretty a i} + {pretty b i})"
-  | lam f     =>
-    let x := s!"x_{i}"
-    s!"(fun {x} => {pretty (f x) (i+1)})"
-  | my_let a b  =>
-    let x := s!"x_{i}"
-    s!"(let {x} := {pretty a i}; => {pretty (b x) (i+1)}"
+-- def pretty (e: Term' (fun _ => String) ty) (i: Nat := 1) : String :=
+--   match e with
+--   | .var s => s
+--   | .nat_const n => toString n
+--   | string_const s => s
+--   | app f a => s!"({pretty f i} {pretty a i})"
+--   | plus a b => s!"({pretty a i} + {pretty b i})"
+--   | lam f     =>
+--     let x := s!"x_{i}"
+--     s!"(fun {x} => {pretty (f x) (i+1)})"
+--   | my_let a b  =>
+--     let x := s!"x_{i}"
+--     s!"(let {x} := {pretty a i}; => {pretty (b x) (i+1)}"
 
-#eval pretty three_test
+-- #eval pretty three_test
 
-#check three_test
+-- #check three_test
 
-def length? {α : Type} (xs : List α) : Nat :=
-  match xs with
-  | [] => 0
-  | y :: ys => 1 + (length? ys)
+-- def length? {α : Type} (xs : List α) : Nat :=
+--   match xs with
+--   | [] => 0
+--   | y :: ys => 1 + (length? ys)
 
-#eval length? [1,2,3,45,56]
+-- #eval length? [1,2,3,45,56]
 
 
 def addr : Socket.SockAddr4 := .v4 (.mk 127 0 0 1) 8889
@@ -149,19 +150,56 @@ def serverloop : IO Unit := do
     handle client
   return ()
 
-def main (args : List String) : IO Unit := do
-  let mode := args.get! 0
-  if mode == "client" then
-    client <| args.get! 1
-  else if mode == "server" then
-    serverloop
-  else
-    IO.println "Unknown mode"
-    return ()
+-- def main (args : List String) : IO Unit := do
+--   let mode := args.get! 0
+--   if mode == "client" then
+--     client <| args.get! 1
+--   else if mode == "server" then
+--     serverloop
+--   else
+--     IO.println "Unknown mode"
+--     return ()
 
-def client2: IO Nat := do
+
+
+def client2: IO Unit := do
   let sock ← Socket.mk .inet .stream
   let local_addr: Socket.SockAddr4 := .v4 (.mk 127 0 0 1) 4599
   sock.connect local_addr
 
-  return 0
+def recv (addr: Socket.SockAddr4): IO Value := do
+  IO.println "waiting for recieve"
+  let sock ← Socket.mk .inet .stream
+  sock.bind addr
+  sock.listen 1
+  let (_client, _sa) ← sock.accept
+  let msg ← sock.recvStr
+  IO.println ("received: " ++ toString msg)
+  return Value.string msg
+
+def send (addr: Socket.SockAddr4) (v: Value) : IO Unit := do
+  IO.println "start blocking send"
+  let sock ← Socket.mk .inet .stream
+  sock.connect addr
+  match v with
+  | Value.string s => sock.sendStr s
+  | _ => sock.sendStr "default"
+
+def server: IO Nat := do
+    let var1 := recv (.v4 (.mk 127 0 0 1) 4599)
+    return 0
+
+def client44: IO Nat := do
+    send (.v4 (.mk 127 0 0 1) 4600) (Value.string "content")
+    return 0
+
+def main (args : List String): IO Nat := do
+  let mode := args.get! 0
+  if mode == "client" then
+    client44
+  else if mode == "server" then
+    server
+  else
+    IO.println "Unknown Location"
+    return 2
+  return 2

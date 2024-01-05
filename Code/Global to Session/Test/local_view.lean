@@ -8,6 +8,7 @@ import Socket
 namespace L
 
   inductive P where
+  | FUNC      : Function -> Array Sorts -> Exp -> P -> P
   | IF        : Exp -> P -> P -> P
   | SEND      : Exp -> Variable -> Location -> P -> P
   | SEND_LBL  : BranchChoice -> Location -> P -> P
@@ -26,7 +27,7 @@ namespace L
   | BRANCH_ON :  Location -> T -> T -> T  -- corresponds to External Choice
   | END       :  T
 
-  def boring_end := P.END (Exp.CONSTANT 0)
+  def boring_end := P.END (Exp.nexp (NExp.const 0))
 
   abbrev with_location (a: Type) := ReaderM Location a
 
@@ -35,16 +36,16 @@ namespace L
 
 
   inductive eval_error where
-  | Exp_error (e: Exp_RESULT Nat): eval_error
+  | Exp_error (e: Exp) (err: exp_error): eval_error
   | info (i: String) : eval_error
   | deadlock: eval_error
 
 
-  abbrev msg := ((Location × Location)  × Variable) × Nat
+  abbrev msg := ((Location × Location)  × Variable) × Value
   abbrev lbl_msg := (Location × Location) × BranchChoice
 
   inductive eval_status where
-  | finished  : Nat -> eval_status
+  | finished  : Value -> eval_status
   | blocking  : eval_status
   | ready     : eval_status
   deriving BEq
@@ -60,7 +61,7 @@ namespace L
     l_msgs  : List lbl_msg
     current : eval_state
     progs   : List eval_state
-    results : List (located Nat)
+    results : List (located Value)
 
   --abbrev eval_resM := ExceptT eval_error (StateM state) eval_res
 
@@ -79,6 +80,7 @@ def LOCAL_TO_TYPE: L.P -> L.T
   | COMPUTE _ _ p => (LOCAL_TO_TYPE p)
   | NOOP p => LOCAL_TO_TYPE p
   | END _ => T.END
+  | FUNC _ _ _ p => LOCAL_TO_TYPE p
 
 
 def substitute_end (new_end: L.P):L.P -> L.P
@@ -88,6 +90,7 @@ def substitute_end (new_end: L.P):L.P -> L.P
   | SEND_LBL val loc p => SEND_LBL val loc (substitute_end new_end p)
   | BRANCH_ON decider opt_a opt_b => BRANCH_ON decider  (substitute_end new_end opt_a)  (substitute_end new_end opt_b)
   | COMPUTE v e p => COMPUTE v e (substitute_end new_end p)
+  | FUNC n as e p => FUNC n as e (substitute_end new_end p)
   | NOOP p => NOOP (substitute_end new_end p)
   | END _ => new_end
 
@@ -102,7 +105,8 @@ def LP_TO_STRING_single(i: Nat) (p: P): String :=
     v ++ " <= " ++  "recv from @" ++ sender
   | SEND_LBL val loc _p => "send_choice " ++ toString val ++ " to @" ++ loc ++ "\n"
   | BRANCH_ON decider opt_a opt_b => "choice@" ++ decider ++ "\n" ++  LP_TO_STRING_single (i+1) opt_a ++ "\n[]\n" ++ LP_TO_STRING_single (i+1) opt_b
-  | COMPUTE v e _p => v ++ " <= " ++ (Exp_TO_STRING e)
+  | COMPUTE v e _p => v ++ " <= " ++ (Exp_toString e)
+  | FUNC n as e _p => n ++ toString as ++ " := " ++ (Exp_toString e)
   | NOOP _p => ""
   | END res => "return " ++ toString res
   leading_spaces ++ content
@@ -117,7 +121,8 @@ def LP_TO_STRING(i: Nat) (p: P): String :=
     v ++ " <= " ++  "recv from @" ++ sender ++ "\n" ++ (LP_TO_STRING i p)
   | SEND_LBL val loc p => "send_choice " ++ toString val ++ " to @" ++ loc ++ "\n" ++ (LP_TO_STRING i p)
   | BRANCH_ON decider opt_a opt_b => "choice@" ++ decider ++ "\n" ++  LP_TO_STRING (i+1) opt_a ++ "\n[]\n" ++ LP_TO_STRING (i+1) opt_b
-  | COMPUTE v e p => v ++ " <= " ++ (Exp_TO_STRING e) ++ "\n" ++ (LP_TO_STRING i p)
+  | COMPUTE v e p => v ++ " <= " ++ (Exp_toString e) ++ "\n" ++ (LP_TO_STRING i p)
+  | FUNC n as e p => n ++ toString as ++ " := " ++ (Exp_toString e) ++ (LP_TO_STRING i p)
   | NOOP p => LP_TO_STRING i p
   | END res => "return " ++ toString res
   leading_spaces ++ content
@@ -151,7 +156,7 @@ instance: ToString L.eval_status where
 
 instance: ToString L.eval_error where
   toString := fun x => match x with
-    | eval_error.Exp_error e => "Exp error + " ++ toString e
+    | eval_error.Exp_error e err => "Exp error + " ++ toString e ++ " -> " ++ toString err
     | eval_error.info s => "Error: " ++ s
     | eval_error.deadlock => "Deadlock"
 
@@ -189,7 +194,7 @@ def block_current (s: group_eval_state): Option group_eval_state :=
   swap_running_program {s with current := {s.current with status := eval_status.blocking}}
 
 -- sets the current eval_status to finish with res and tries to swap
-def finish_current (s: group_eval_state) (res: Nat): Option group_eval_state :=
+def finish_current (s: group_eval_state) (res: Value): Option group_eval_state :=
   swap_running_program {s with current := {s.current with status := eval_status.finished res}}
 
 --
@@ -197,6 +202,7 @@ def activate (s: group_eval_state): group_eval_state :=
   let active_progs := s.progs.map (fun x => {x with status :=
     match x.status with
     | eval_status.finished r =>  eval_status.finished r
+    | eval_status.blocking => eval_status.ready
     | x => x
     })
   {s with progs := active_progs}
@@ -206,7 +212,7 @@ def send_to_all (locs: List Location) (b: BranchChoice) (p: L.P): L.P :=
   | [] => L.P.NOOP p
   | x::xs => L.P.SEND_LBL b x (send_to_all xs b p)
 
-partial def eval_local (s: group_eval_state): ExceptT eval_error (StateM trace) (List (located Nat)) := do
+partial def eval_local (s: group_eval_state): ExceptT eval_error (StateM trace) (List (located Value)) := do
   set ((<-get) ++ [s])
 
   let running_program := s.current.prog
@@ -217,31 +223,31 @@ partial def eval_local (s: group_eval_state): ExceptT eval_error (StateM trace) 
   | NOOP p => eval_local {s with current := {s.current with prog := p}}
   | IF e opt_a opt_b =>
 
-    let evaluation := eval_Exp c_env e
+    let evaluation := eval_exp e c_env
       match evaluation with
-      | Exp_RESULT.some r =>
-        let broadcast_msgs: List lbl_msg := s.progs.map (fun x => ((s.current.loc, x.loc), if r == 0 then BranchChoice.fst else BranchChoice.snd))
-        let new_state: group_eval_state := activate { s with l_msgs := s.l_msgs ++ broadcast_msgs, current := {s.current with prog := if r == 0 then opt_a else opt_b},}
+      | .ok r =>
+        let broadcast_msgs: List lbl_msg := s.progs.map (fun x => ((s.current.loc, x.loc), if r == (Value.bool true) then BranchChoice.fst else BranchChoice.snd))
+        let new_state: group_eval_state := activate { s with l_msgs := s.l_msgs ++ broadcast_msgs, current := {s.current with prog := if r == (Value.bool true) then opt_a else opt_b},}
         eval_local new_state
-      | x => throw (eval_error.Exp_error x)
+      | .error err => throw (eval_error.Exp_error e err)
 
   | SEND e v receiver p => do
 
-    let evaluation := eval_Exp c_env e
+    let evaluation := eval_exp e c_env
     match evaluation with
-    | Exp_RESULT.some r =>
+    | .ok r =>
       let new_message: msg := (((s.current.loc, receiver), v), r)
       let new_state := { s with messages := s.messages.cons new_message, current := {s.current with prog := p}}
       eval_local (activate new_state)
-    | x => throw (eval_error.Exp_error x)
+    | .error err => throw (eval_error.Exp_error e err)
 
   | RECV v_name sender p => do
     let awaited_msg: (Location×Location) × Variable  := ((sender, s.current.loc), v_name)
     let v_opt := s.messages.lookup awaited_msg
     match v_opt with
     | Option.some v =>
-      let new_var_map: List (Variable × Nat) := (var_map c_env).concat (v_name, v)
-      let new_env: P_state := (new_var_map, (funcs c_env))
+      let new_var_map: List (Variable × Value) := (c_env.var_map).concat (v_name, v)
+      let new_env: P_state := (new_var_map, (c_env.funcs))
       let new_state := { s with current := {s.current with env := new_env, prog := p}, messages:= s.messages.erase (awaited_msg, v) }
       eval_local new_state
     | Option.none =>
@@ -252,20 +258,23 @@ partial def eval_local (s: group_eval_state): ExceptT eval_error (StateM trace) 
       | Option.none =>
         throw eval_error.deadlock
   | COMPUTE v e p => do
-    let evaluation := eval_Exp c_env e
+    let evaluation := eval_exp e c_env
     match evaluation with
-    | Exp_RESULT.some r =>
-      let new_var_map: List (Variable × Nat) := (var_map c_env).concat (v, r)
-      let new_env: P_state := (new_var_map, (funcs c_env))
+    | .ok r =>
+      let new_var_map: List (Variable × Value) := (c_env.var_map).concat (v, r)
+      let new_env: P_state := (new_var_map, (c_env.funcs))
       let new_state := { s with current := {s.current with env := new_env, prog := p} }
       eval_local new_state
-    | x => throw (eval_error.Exp_error x)
+    | .error err => throw (eval_error.Exp_error e err)
+  | FUNC n as e p => do
+    let new_state := { s with current := {s.current with prog := p} }
+    eval_local new_state
 
   | END res_Exp =>
 
-    let evaluation := eval_Exp s.current.env res_Exp
+    let evaluation := eval_exp res_Exp s.current.env
     match evaluation with
-    | Exp_RESULT.some r =>
+    | .ok r =>
       let located_res := (r, s.current.loc)
       let s := {s with results := s.results.concat located_res}
       let swap_state_opt := finish_current s r
@@ -273,7 +282,7 @@ partial def eval_local (s: group_eval_state): ExceptT eval_error (StateM trace) 
       | Option.some swap_state =>
         eval_local swap_state
       | Option.none => return s.results
-    | x => throw (eval_error.Exp_error x)
+    | .error err => throw (eval_error.Exp_error res_Exp err)
 
   | SEND_LBL val loc p => do
     let new_message: lbl_msg := (((s.current.loc, loc)), val)
@@ -290,23 +299,29 @@ partial def eval_local (s: group_eval_state): ExceptT eval_error (StateM trace) 
         { s with current := {s.current with prog := opt_b}}
       eval_local new_state
 
-    | Option.none => throw eval_error.deadlock
+    | Option.none =>
+      let swap_state_opt := block_current s
+      match swap_state_opt with
+      | Option.some swap_state =>
+        eval_local swap_state
+      | Option.none =>
+        throw eval_error.deadlock
 
 
-def lp_1_sending: P := P.SEND (Exp.VAR "var1") "var1" "server" (boring_end)
+def lp_1_sending: P := P.SEND (Exp.nexp (NExp.var "var1")) "var1" "server" (boring_end)
 
 
 
 def lp_2_receiving: P := P.RECV "var1" "client"
-  (P.END (Exp.VAR "var1"))
+  (P.END (Exp.nexp (NExp.var "var1")))
 
-def l_env_1: P_state := ([("var1", 101)], [])
+def l_env_1: P_state := ([("var1", Value.nat 101)], [])
 
 def lstate_1_send: eval_state := { loc := "client", env := l_env_1, prog:= lp_1_sending }
 def lstate_1_receive: eval_state := { loc := "server", env := empty_P_state, prog:= lp_2_receiving }
 
 
-def temp_prg: L.P := L.P.SEND (Exp.CONSTANT 3) "sa" "anywhere" (L.P.END (Exp.CONSTANT 3))
+def temp_prg: L.P := L.P.SEND (Exp.nexp (NExp.const 3)) "sa" "anywhere" (L.P.END (Exp.nexp (NExp.const 3)))
 def lstate_3_test: eval_state := { loc := "client", env := l_env_1, prog:= temp_prg}
 
 def state_of (starter: eval_state) (others: List eval_state): group_eval_state :={

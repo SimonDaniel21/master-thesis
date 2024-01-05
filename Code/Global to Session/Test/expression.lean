@@ -19,155 +19,217 @@ deriving BEq
 -- | EQUALS: Exp -> Exp -> Exp
 -- --| BinExp: Bop -> Exp
 -- deriving BEq
+mutual
+  inductive BExp where
+  | not: BExp -> BExp
+  | and: BExp -> BExp -> BExp
+  | smaller: NExp -> NExp -> BExp
+  | const: Bool -> BExp
+  | var: Variable -> BExp
+  deriving BEq
 
-inductive BExp where
-| not: BExp -> BExp
-| and: BExp -> BExp -> BExp
-| const: Bool -> BExp
-| var: Variable -> BExp
-deriving BEq
+  inductive NExp where
+  | plus: NExp -> NExp -> NExp
+  | minus: NExp -> NExp -> NExp
+  | multiply: NExp -> NExp -> NExp
+  | divide: NExp -> NExp -> NExp
+  | const: Nat -> NExp
+  | var: Variable -> NExp
+  | func: Function -> Array Exp -> NExp
+  deriving BEq
 
-inductive NExp where
-| plus: NExp -> NExp -> NExp
-| minus: NExp -> NExp -> NExp
-| multiply: NExp -> NExp -> NExp
-| divide: NExp -> NExp -> NExp
-| const: Nat -> NExp
-| var: Variable -> NExp
-deriving BEq
+  inductive SExp where
+  | concat: SExp -> SExp -> SExp
+  | const: String -> SExp
+  | var: Variable -> SExp
+  deriving BEq
 
-inductive SExp where
-| concat: SExp -> SExp -> SExp
-| const: String -> SExp
-| var: Variable -> SExp
-deriving BEq
+  inductive Exp where
+  | nexp (e: NExp): Exp
+  | bexp (e: BExp): Exp
+  | sexp (e: SExp): Exp
+  deriving BEq
+end
 
-inductive Exp where
-| nexp (e: NExp): Exp
-| bexp (e: BExp): Exp
-| sexp (e: SExp): Exp
 
-deriving BEq
 
 open Exp
 
 inductive exp_error where
 | wrong_type (got expected:Sorts) : exp_error
 | unknown_var (name: Variable) : exp_error
+| wrong_args_num(got expected: Nat): exp_error
 | division_by_zero
+deriving BEq
 
 def exp_res := Except exp_error Value
 
 
-abbrev P_state := (List (Variable × Value)) ×  (List (Function × (Nat -> Nat)))
+
+
+abbrev P_state := (List (Variable × Value)) ×  (List (Function × Nat × Exp))
 
 def P_state.var_map (env: P_state) := env.fst
 
 def P_state.funcs (env: P_state) := env.snd
 
-def eval_NExp (env: P_state): NExp -> exp_res
-| .plus a b => do
-  let val_a <- eval_NExp a
-  let val_b <- eval_NExp b
-  match val_a with
-  | Value.nat n1 =>
-    match val_b with
-    | Value.nat n2 =>
-      return Value.nat (n1-n2)
-    | x => throw (exp_error.wrong_type x.denote Sorts.nat)
-  | x => throw (exp_error.wrong_type x.denote Sorts.nat)
-| .minus a b => do
-  let val_a <- eval_NExp a
-  let val_b <- eval_NExp b
-  match val_a with
-  | Value.nat n1 =>
-    match val_b with
-    | Value.nat n2 =>
-      return Value.nat (n1-n2)
-    | x => throw (exp_error.wrong_type x.denote Sorts.nat)
-  | x => throw (exp_error.wrong_type x.denote Sorts.nat)
-| .multiply a b => do
-  let val_a <- eval_NExp a
-  let val_b <- eval_NExp b
-  match val_a with
-  | Value.nat n1 =>
-    match val_b with
-    | Value.nat n2 =>
-      return Value.nat (n1*n2)
-    | x => throw (exp_error.wrong_type x.denote Sorts.nat)
-  | x => throw (exp_error.wrong_type x.denote Sorts.nat)
-| .divide a b => do
-  let val_a <- eval_NExp a
-  let val_b <- eval_NExp b
-  match val_a with
-  | Value.nat n1 =>
-    match val_b with
-    | Value.nat n2 =>
-      if n2 == 0 then
-        throw (exp_error.division_by_zero)
-      else
-        return Value.nat (n1/n2)
-    | x => throw (exp_error.wrong_type x.denote Sorts.nat)
-  | x => throw (exp_error.wrong_type x.denote Sorts.nat)
 
-| .const n => do
-  return Value.nat n
-| .var v =>
-  let var_value_opt := (env.var_map).lookup v
-  match var_value_opt with
-  | Option.none => throw (exp_error.unknown_var v)
-  | Option.some var_value => match var_value with
-    | .nat _  => return var_value
-    | x => throw (exp_error.wrong_type x.denote Sorts.nat)
+def try_map {α β err : Type}  (l: List α) (f: α -> Except err β ) : Except err (List β) :=
+  match l with
+  | [] => .ok []
+  | a::as => do
+    let current_eval <- f a
+    let cont <- try_map as f
+    return [current_eval] ++ cont
 
-def eval_BExp (e: BExp): exp_res := match e with
-| .and a b => do
-  let val_a <- eval_BExp a
-  let val_b <- eval_BExp b
-  match val_a with
-  | Value.bool b1 =>
-    match val_b with
-    | Value.bool b2 =>
-      return Value.bool (b1 && b2)
+mutual
+  def eval_NExp: NExp -> ReaderT P_state (Except exp_error) Value
+  | .plus a b => do
+    let val_a <- eval_NExp a
+    let val_b <- eval_NExp b
+    match val_a with
+    | Value.nat n1 =>
+      match val_b with
+      | Value.nat n2 =>
+        return Value.nat (n1+n2)
+      | x => throw (exp_error.wrong_type x.denote Sorts.nat)
+    | x => throw (exp_error.wrong_type x.denote Sorts.nat)
+  | .minus a b => do
+    let val_a <- eval_NExp a
+    let val_b <- eval_NExp b
+    match val_a with
+    | Value.nat n1 =>
+      match val_b with
+      | Value.nat n2 =>
+        return Value.nat (n1-n2)
+      | x => throw (exp_error.wrong_type x.denote Sorts.nat)
+    | x => throw (exp_error.wrong_type x.denote Sorts.nat)
+  | .multiply a b => do
+    let val_a <- eval_NExp a
+    let val_b <- eval_NExp b
+    match val_a with
+    | Value.nat n1 =>
+      match val_b with
+      | Value.nat n2 =>
+        return Value.nat (n1*n2)
+      | x => throw (exp_error.wrong_type x.denote Sorts.nat)
+    | x => throw (exp_error.wrong_type x.denote Sorts.nat)
+  | .divide a b => do
+    let val_a <- eval_NExp a
+    let val_b <- eval_NExp b
+    match val_a with
+    | Value.nat n1 =>
+      match val_b with
+      | Value.nat n2 =>
+        if n2 == 0 then
+          throw (exp_error.division_by_zero)
+        else
+          return Value.nat (n1/n2)
+      | x => throw (exp_error.wrong_type x.denote Sorts.nat)
+    | x => throw (exp_error.wrong_type x.denote Sorts.nat)
+  | .const n => do
+    return Value.nat n
+  | .var v => do
+    let env <- read
+    let var_value_opt := (env.var_map).lookup v
+    match var_value_opt with
+    | Option.none => throw (exp_error.unknown_var v)
+    | Option.some var_value => match var_value with
+      | .nat _  => return var_value
+      | x => throw (exp_error.wrong_type x.denote Sorts.nat)
+  | .func f_name args => do
+    let env <- read
+    let f_opt := (env.funcs).lookup f_name
+    return Value.nat 999
+    -- match f_opt with
+    -- | Option.none => throw (exp_error.unknown_var f_name)
+    -- | Option.some f =>
+
+    --   if (f.fst != args.size) then
+    --     throw (exp_error.wrong_args_num f.fst args.size)
+    --   else
+    --    --let arg_vals <- args.map (fun x => eval_exp x env)
+    --     return Value.nat 999
+
+    --   --let arg_vals <- n_eval_array args.toList env
+    --   --let arg_vals <- try_map args.toList (fun x => eval_exp x env)
+
+
+  def eval_BExp: BExp -> ReaderT P_state (Except exp_error) Value
+  | .and a b => do
+    let val_a <- eval_BExp a
+    let val_b <- eval_BExp b
+    match val_a with
+    | Value.bool b1 =>
+      match val_b with
+      | Value.bool b2 =>
+        return Value.bool (b1 && b2)
+      | x => throw (exp_error.wrong_type x.denote Sorts.bool)
     | x => throw (exp_error.wrong_type x.denote Sorts.bool)
-  | x => throw (exp_error.wrong_type x.denote Sorts.bool)
-| .not b => do
-  let val <- eval_BExp b
-  match val with
-  | Value.bool val_b =>
-    return Value.bool !val_b
-  | x => throw (exp_error.wrong_type x.denote Sorts.bool)
-| .const b => do
-  return Value.bool b
-
-def eval_SExp (e: SExp): exp_res := match e with
-| .concat a b => do
-  let val_a <- eval_SExp a
-  let val_b <- eval_SExp b
-  match val_a with
-  | Value.string s1 =>
-    match val_b with
-    | Value.string s2 =>
-      return Value.string (s1 ++ s2)
-    | x => throw (exp_error.wrong_type x.denote Sorts.string)
-  | x => throw (exp_error.wrong_type x.denote Sorts.string)
-| .const s => do
-  return Value.string s
-| .var v =>
-  let var_value_opt := (env.var_map).lookup v
-  match var_value_opt with
-  | Option.none => throw (exp_error.unknown_var v)
-  | Option.some var_value => match var_value with
-    | .string _  => return var_value
+  | .smaller a b => do
+    let val_a <- eval_NExp a
+    let val_b <- eval_NExp b
+    match val_a with
+    | Value.nat a =>
+      match val_b with
+      | Value.nat b =>
+        return Value.bool (a < b)
+      | x => throw (exp_error.wrong_type x.denote Sorts.nat)
     | x => throw (exp_error.wrong_type x.denote Sorts.nat)
+  | .not b => do
+    let val <- eval_BExp b
+    match val with
+    | Value.bool val_b =>
+      return Value.bool !val_b
+    | x => throw (exp_error.wrong_type x.denote Sorts.bool)
+  | .const b => do
+    return Value.bool b
+  | .var v => do
+    let env <- read
+    let var_value_opt := (env.var_map).lookup v
+    match var_value_opt with
+    | Option.none => throw (exp_error.unknown_var v)
+    | Option.some var_value => match var_value with
+      | .bool _  => return var_value
+      | x => throw (exp_error.wrong_type x.denote Sorts.bool)
+
+  def eval_SExp: SExp -> ReaderT P_state (Except exp_error) Value
+  | .concat a b => do
+    let val_a <- eval_SExp a
+    let val_b <- eval_SExp b
+    match val_a with
+    | Value.string s1 =>
+      match val_b with
+      | Value.string s2 =>
+        return Value.string (s1 ++ s2)
+      | x => throw (exp_error.wrong_type x.denote Sorts.string)
+    | x => throw (exp_error.wrong_type x.denote Sorts.string)
+  | .const s => do
+    return Value.string s
+  | .var v => do
+    let env <- read
+    let var_value_opt := (env.var_map).lookup v
+    match var_value_opt with
+    | Option.none => throw (exp_error.unknown_var v)
+    | Option.some var_value => match var_value with
+      | .string _  => return var_value
+      | x => throw (exp_error.wrong_type x.denote Sorts.nat)
 
 
+  def eval_exp: Exp -> ReaderT P_state (Except exp_error) Value
+  | Exp.nexp e => eval_NExp e
+  | Exp.bexp e => eval_BExp e
+  | Exp.sexp e => eval_SExp e
 
 
-def eval_exp (env: P_state): Exp -> exp_res
-| Exp.nexp e => eval_NExp e
-| Exp.bexp e => eval_BExp e
-| Exp.sexp e => eval_SExp e
+  def n_eval_array (array: List Exp) (env: P_state) : Except exp_error (Array Value) :=
+    match array with
+    | [] => .ok #[]
+    | a::as => do
+      let current_eval <- eval_exp a env
+      let cont <- n_eval_array as env
+      return #[current_eval].append cont
+end
 
 
 
@@ -175,8 +237,9 @@ def eval_exp (env: P_state): Exp -> exp_res
 instance: ToString (exp_error) where
   toString (e: exp_error) := match e with
     | exp_error.division_by_zero => "Division by zero "
-    | exp_error.wrong_type t1 t2 => "expected " ++ toString t1 ++ " but got " ++ toString t2
+    | exp_error.wrong_type t1 t2 => "expected " ++ toString t2 ++ " but got " ++ toString t1
     | exp_error.unknown_var name => "Exp contains unknown var: " ++ name
+    | .wrong_args_num got expected => "function got " ++ toString got ++ " args but expected " ++ toString expected
 
 -- def Exp_TO_STRING: Exp -> String
 -- | FUNC f e => f ++ "(" ++ Exp_TO_STRING e ++ ")"
@@ -188,14 +251,46 @@ instance: ToString (exp_error) where
 -- | MINUS a b => "(" ++ (Exp_TO_STRING a) ++ " - " ++ (Exp_TO_STRING b) ++ ")"
 -- | SMALLER a b => "(" ++ (Exp_TO_STRING a) ++ " < " ++ (Exp_TO_STRING b) ++ ")"
 -- | EQUALS a b => "(" ++ (Exp_TO_STRING a) ++ " == " ++ (Exp_TO_STRING b) ++ ")"
+mutual
+  partial def NExp_toString (e: NExp):String := match e with
+    | .plus a b => "(" ++ (NExp_toString a) ++ " + " ++ (NExp_toString b) ++ ")"
+    | .minus a b => "(" ++ (NExp_toString a) ++ " - " ++ (NExp_toString b) ++ ")"
+    | .multiply a b => "(" ++ (NExp_toString a) ++ " x " ++ (NExp_toString b) ++ ")"
+    | .divide a b => "(" ++ (NExp_toString a) ++ " / " ++ (NExp_toString b) ++ ")"
+    | .const c => toString c
+    | .var n => n
+    | .func name args=> name ++ "(" ++ toString (args.map (fun x => Exp_toString x) ) ++ ")"
+
+  partial def BExp_toString (e: BExp):String := match e with
+    | .not b => "(! " ++ (BExp_toString b) ++ ")"
+    | .and a b => "(" ++ (BExp_toString a) ++ " && " ++ (BExp_toString b) ++ ")"
+    | .smaller a b => "(" ++ (NExp_toString a) ++ " < " ++ (NExp_toString b) ++ ")"
+    | .const c => toString c
+    | .var n => n
+
+  partial def SExp_toString (e: SExp):String := match e with
+    | .concat a b => "(" ++ (SExp_toString a) ++ " ++ " ++ (SExp_toString b) ++ ")"
+    | .const c => "\"" ++ c ++ "\""
+    | .var n => n
+
+  partial instance: ToString SExp where
+    toString := SExp_toString
+  partial instance: ToString BExp where
+    toString := BExp_toString
+  partial instance: ToString NExp where
+    toString := NExp_toString
+  partial def Exp_toString (e: Exp):String := match e with
+    | .nexp e => NExp_toString e
+    | .bexp e => BExp_toString e
+    | .sexp e => SExp_toString e
+
+  partial instance: ToString Exp where
+    toString := Exp_toString
 
 
-
-
--- instance: ToString Exp where
---   toString := Exp_TO_STRING
-
+end
 open Exp
+
 
 inductive SYMBOL where
   | var (v: Variable) (amount: Nat) : SYMBOL
@@ -332,12 +427,21 @@ instance: ToString P_state where
 --                 TYPED_Exp GAMMA (Exp.PLUS e1 e2) nat
 
 
-def vars: List (Variable × Value) := [("v1", Value.nat 3)]
+def vars: List (Variable × Value) := [("v1", Value.nat 3), ("str_var", Value.string "World")]
 
-def add_one (v: Nat): Nat :=
-  v+1
+def add_one_old (args: Array Value): exp_res :=
+  let a0_opt := args[0]?
+  match a0_opt with
+  | some a0 => match a0 with
+    | .nat n => return Value.nat (n+1)
+    | x => throw (exp_error.wrong_type x.denote Sorts.nat)
+  | none => throw (exp_error.wrong_args_num 0 1)
 
-def test_env : P_state := (vars, [("add_one", add_one )])
+def add_one: Function × (Nat × Exp) := ("add_one", 1, Exp.nexp (NExp.plus (NExp.var "a0") (NExp.const 2)))
+
+#check add_one
+
+def test_env : P_state := (vars, [(add_one)])
 
 #eval test_env
 #eval vars
@@ -345,27 +449,49 @@ def test_env : P_state := (vars, [("add_one", add_one )])
 
 def e_1: Exp := Exp.nexp (NExp.multiply (NExp.plus (NExp.const 3) (NExp.const 34)) (NExp.const 2))
 def e_2_nan: Exp := Exp.nexp (NExp.multiply (NExp.const 2) (NExp.divide (NExp.const 3) (NExp.const 0)))
-def e_3_unknown: Exp := Exp.nexp (NExp.multiply (Exp.var "v_unknown") (Exp.DIVIDE (Exp.CONSTANT 3) (Exp.CONSTANT 0)))
-def e_4_var: Exp := Exp.MINUS (Exp.VAR "v1") (Exp.DIVIDE (Exp.CONSTANT 4) (Exp.CONSTANT 2))
-def e_5_var_and_func: Exp := Exp.MINUS (Exp.VAR "v1") (Exp.FUNC "add_one" (Exp.CONSTANT 1))
-
+def e_3_unknown: Exp := Exp.nexp (NExp.multiply (NExp.var "v_unknown") (NExp.divide (NExp.const 3) (NExp.const 0)))
+def e_4_var: Exp := Exp.nexp (NExp.minus (NExp.var "v1") (NExp.divide (NExp.const 4) (NExp.const 2)))
+def e_5_var_and_func: Exp := Exp.nexp (NExp.minus (NExp.var "v1") (NExp.func "add_one" #[Exp.nexp (NExp.const 1)]))
+def e_6_bool: Exp := Exp.bexp (BExp.and (BExp.const true) (BExp.const false) )
+def e_7_string: Exp := Exp.sexp (SExp.concat (SExp.const "Hello ") (SExp.var "str_var") )
 
 #eval vars
 
 #eval (e_1)
-#eval (eval_Exp test_env e_1 == Exp_RESULT.some 74)
+#eval (eval_exp e_1 test_env)
+--#eval ((eval_exp e_1 test_env) == Except.ok (Value.nat 74))
 
 #eval (e_2_nan)
-#eval (eval_Exp test_env e_2_nan == Exp_RESULT.DIV_BY_ZERO)
+#eval (eval_exp e_2_nan test_env)
+--#eval (eval_exp test_env e_2_nan == .error exp_error.division_by_zero)
 
 #eval (e_3_unknown)
-#eval (eval_Exp test_env e_3_unknown == Exp_RESULT.UNKNOWN_VAR "v_unknown")
+#eval (eval_exp  e_3_unknown test_env)
+--#eval (eval_Exp test_env e_3_unknown == Exp_RESULT.UNKNOWN_VAR "v_unknown")
 
 #eval (e_4_var)
-#eval (eval_Exp test_env e_4_var == Exp_RESULT.some 1)
+#eval (eval_exp  e_4_var test_env)
+--#eval (eval_Exp test_env e_4_var == Exp_RESULT.some 1)
+
+
+#eval (e_4_var)
+#eval (eval_exp  e_4_var test_env)
 
 #eval (e_5_var_and_func)
-#eval (eval_Exp test_env e_5_var_and_func)
-#eval (eval_Exp test_env e_5_var_and_func == Exp_RESULT.some 1)
+#eval (eval_exp  e_5_var_and_func test_env)
+--#eval (eval_Exp test_env e_5_var_and_func == Exp_RESULT.some 1)
+
+#eval (e_6_bool)
+#eval (eval_exp  e_6_bool test_env)
+
+#eval (e_7_string)
+#eval (eval_exp  e_7_string test_env)
+
+
 
 def faraway2 := 3
+
+
+def test_array: List Exp := [Exp.nexp (NExp.const 5), Exp.sexp (SExp.const "bla")]
+
+#eval n_eval_array test_array ([],[])

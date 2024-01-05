@@ -13,8 +13,8 @@ namespace G
   | IF : located Exp -> P -> P -> P
   | SEND_RECV    : located Exp -> located Variable -> P -> P
   | COMPUTE (v: Variable) (e: Exp) (a: Location) :   P -> P
-  | END     : Exp -> Location -> P
-
+  | FUNC      : Function -> Array Sorts -> Exp -> P -> P
+  | END     : located Exp -> P
 
   inductive T where
   --| IF : Location -> T -> T -> T -> T
@@ -24,12 +24,12 @@ namespace G
 
   inductive Eval_error where
   | unknown_Location (a: Location) : Eval_error
-  | Exp_error (e: Exp_RESULT Nat): Eval_error
+  | Exp_error (e: Exp) (err: exp_error): Eval_error
   | unknown_message_var (name: Variable) : Eval_error
 
   def Env := HashMap Location P_state
 
-  abbrev Eval_res := ExceptT Eval_error (StateT Env (with_logs String)) Nat
+  abbrev Eval_res := ExceptT Eval_error (StateT Env (with_logs String)) Value
 end G
 
 open G
@@ -45,7 +45,8 @@ def GLOBAL_TO_TYPE: P -> T
 | IF (_e, el) opt_a opt_b =>  T.BRANCH el (GLOBAL_TO_TYPE opt_a) (GLOBAL_TO_TYPE opt_b)
 | SEND_RECV (_e, sender) (_v, receiver) p => T.SEND_RECV sender receiver Sorts.nat (GLOBAL_TO_TYPE p)
 | COMPUTE _ _ _ p => (GLOBAL_TO_TYPE p)
-| END _ _ => T.END
+| FUNC _ _ _ p => (GLOBAL_TO_TYPE p)
+| END _ => T.END
 
 
 -- i for indents
@@ -56,8 +57,9 @@ def GP_TO_STRING (i: Nat) (p: P):  String :=
     GP_TO_STRING  (i + 1) opt_a ++ "\nelse\n" ++ GP_TO_STRING (i + 1) opt_b ++ "\n"
   | SEND_RECV (e, sender) (v, receiver) p =>
     v ++ "@" ++ receiver ++ " <= " ++ toString e ++  "@" ++ sender ++ "\n" ++ (GP_TO_STRING i p)
-  | END result l => toString result ++ "@" ++ l
-  | COMPUTE v e l p => v ++  "@" ++ l ++ " <= " ++ (Exp_TO_STRING e) ++ " @" ++ l ++ "\n" ++ (GP_TO_STRING i p)
+  | END (result, l) => toString result ++ "@" ++ l
+  | FUNC n as e p => n ++ toString as ++ " := " ++ toString e ++ "\n" ++ (GP_TO_STRING i p)
+  | COMPUTE v e l p => v ++  "@" ++ l ++ " <= " ++ (Exp_toString e) ++ " @" ++ l ++ "\n" ++ (GP_TO_STRING i p)
   leading_spaces ++ content
 
 
@@ -93,7 +95,7 @@ instance: ToString G.Env where
 instance: ToString G.Eval_error where
   toString := fun x => match x with
   | Eval_error.unknown_Location a => "unknown Location " ++ a ++ " introduced"
-  | Eval_error.Exp_error e => "Exp Error:\n" ++ toString e
+  | Eval_error.Exp_error e err => "Exp Error:\n" ++ toString e ++ " -> " ++ toString err
   | Eval_error.unknown_message_var v => "unknown message Variable: " ++ v
 
 
@@ -103,7 +105,7 @@ instance: ToString G.Eval_error where
 --   | Exp_error (e: Exp_RESULT Nat) (logs: List global_P_state): global_evaluation_result_old x
 --   | unknown_message_var (name: Variable) (logs: List global_P_state): global_evaluation_result_old x
 
-instance: ToString (with_logs String (Except Eval_error Nat × Env)) where
+instance: ToString (with_logs String (Except Eval_error Value × Env)) where
   toString := fun eval =>
     let (res_e, e) := eval.value
     let result_string: String := match res_e with
@@ -129,14 +131,14 @@ def eval_global: P -> Eval_res
     | Option.some sender_state =>
       match receiver_state_opt with
       | Option.some receiver_state =>
-        let Exp_result := eval_Exp sender_state e
+        let Exp_result := eval_exp e sender_state
         match Exp_result with
-        | Exp_RESULT.some r =>
-          let new_var_map: List (Variable × Nat) := (var_map receiver_state).concat (v, r)
-          let new_state: Env := (state.insert receiver (new_var_map, (funcs receiver_state)))
+        | .ok r =>
+          let new_var_map: List (Variable × Value) := (receiver_state.var_map).concat (v, r)
+          let new_state: Env := (state.insert receiver (new_var_map, (receiver_state.funcs)))
           set new_state
           eval_global p
-        | x => throw (Eval_error.Exp_error x)
+        | .error err => throw (Eval_error.Exp_error e err)
       | Option.none => throw (Eval_error.unknown_Location receiver)
     | Option.none => throw (Eval_error.unknown_Location sender)
    | COMPUTE v e a p =>
@@ -147,16 +149,19 @@ def eval_global: P -> Eval_res
       let local_state_opt := state.find? a
       match local_state_opt with
       | Option.some local_state =>
-        let evaluation := eval_Exp local_state e
+        let evaluation := eval_exp e local_state
         match evaluation with
-        | Exp_RESULT.some r =>
-          let new_var_map: List (Variable × Nat) := (var_map local_state).concat (v, r)
-          let new_state: Env := (state.insert a (new_var_map, (funcs local_state)))
+        | .ok r =>
+          let new_var_map: List (Variable × Value) := (local_state.var_map).concat (v, r)
+          let new_state: Env := (state.insert a (new_var_map, (local_state.funcs)))
           set new_state
           eval_global p
-        | x => throw (Eval_error.Exp_error x)
+        | .error err => throw (Eval_error.Exp_error e err)
 
       | Option.none => throw (Eval_error.unknown_Location a)
+  | FUNC n as e p =>
+    do
+      throw (Eval_error.Exp_error e exp_error.division_by_zero)
   | IF (e, el) opt_a opt_b =>
     do
     let state <- get
@@ -165,25 +170,25 @@ def eval_global: P -> Eval_res
     let expr_state_opt := state.find? el
     match expr_state_opt with
     | Option.some expr_state =>
-      let Exp_result := eval_Exp expr_state e
+      let Exp_result := eval_exp e expr_state
       match Exp_result with
-      | Exp_RESULT.some n =>
-        if n == 0 then
+      | .ok n =>
+        if n == Value.bool true then
           eval_global opt_b
         else
           eval_global opt_a
-      | x => throw (Eval_error.Exp_error x)
+      | .error err => throw (Eval_error.Exp_error e err)
     | Option.none => throw (Eval_error.unknown_Location el)
-  | END e a =>
+  | END (e, a) =>
     do
     let state <- get
     let local_state_opt := state.find? a
     match local_state_opt with
     | Option.some local_state =>
-      let evaluation := eval_Exp local_state e
+      let evaluation := eval_exp e local_state
       match evaluation with
-      | Exp_RESULT.some r => return r
-      | x =>  throw (Eval_error.Exp_error x)
+      | .ok r => return r
+      | .error err =>  throw (Eval_error.Exp_error e err)
     | Option.none => throw (Eval_error.unknown_Location a)
 
 def combine (lst: List (List Location)): List Location :=
@@ -196,16 +201,17 @@ def combine (lst: List (List Location)): List Location :=
 def result_location: G.P -> Location
   | IF _ _ p => result_location p
   | SEND_RECV _ _ p => result_location p
-  | END _ l => l
+  | END (_, l) => l
   | COMPUTE _ _ _ p => result_location p
+  | FUNC _ _ _ p => result_location p
 
 def participants: G.P -> List Location
   | IF (_, el) opt_a opt_b => combine [(participants opt_b), (participants opt_a), [el]]
   | SEND_RECV (_e, sender) (_v, receiver) p =>
     combine [(participants p ), [receiver, sender]]
-  | END _ l => [l]
+  | END (_, l) => [l]
   | COMPUTE _v _e l _p =>[l]
-
+  | FUNC _n _as _e _p => []
 
 
 
@@ -231,7 +237,7 @@ def EPP_P (prog: G.P) (l: Location) (bi: Nat := 0): L.P :=
     else
       EPP_P p l
 
-  | END result end_loc =>
+  | END (result, end_loc) =>
     if(l == end_loc)then
       L.P.END result
     else
@@ -242,6 +248,8 @@ def EPP_P (prog: G.P) (l: Location) (bi: Nat := 0): L.P :=
       L.P.COMPUTE v e (EPP_P p l)
     else
       EPP_P p l
+  | FUNC n as e p =>
+    L.P.FUNC n as e (EPP_P p l)
 
 def EPP_T (gt: G.T) (l: Location): L.T :=
   match gt with
@@ -266,31 +274,36 @@ open Lean
 def price_of (x: Nat): Nat := x + 100
 def delivery_date (_x: Nat): Nat := 42
 
-def l_test_Env1: P_state := ([("title", 0),("budget", 422)],[])
-def l_test_Env2: P_state := ([],[("price_of", price_of), ("delivery_date_of", delivery_date)])
+-- def l_test_Env1: P_state := ([("title", Value.string "Moby Dick"),("budget", Value.nat 422)],[])
+-- def l_test_Env2: P_state := ([],[("price_of", price_of), ("delivery_date_of", delivery_date)])
+
+def l_test_Env1: P_state := ([("title", Value.string "Moby Dick"),("budget", Value.nat 4222)],[])
+def l_test_Env2: P_state := ([],[])
 
 def g_test_Env : G.Env := HashMap.ofList [("buyer", l_test_Env1), ("seller", l_test_Env2)]
 
 
 #eval g_test_Env
 
-def test_program_1: P := SEND_RECV ((Exp.VAR "var1"), "client") ("var1", "server") (END (Exp.VAR "var1") "client")
-def test_program_2: P := SEND_RECV ((Exp.VAR "var1"), "var1") ("client", "server")
-  (SEND_RECV ((Exp.VAR "var2"), "server") ("var2", "client")
-  (COMPUTE "var3" (Exp.DIVIDE (Exp.CONSTANT 2) (Exp.CONSTANT 0)) "server" (END (Exp.VAR "var3") "seller")))
+def test_program_1: P := SEND_RECV ((Exp.nexp (NExp.var "var1")), "client") ("var1", "server") (END ((Exp.nexp (NExp.var "var1")), "client"))
+def test_program_2: P := SEND_RECV (Exp.nexp (NExp.var "var1"), "var1") ("client", "server")
+  (SEND_RECV ((Exp.nexp (NExp.var "var2")), "server") ("var2", "client")
+  (COMPUTE "var3" (Exp.nexp (NExp.divide (NExp.const 2) (NExp.const 0))) "server" (END ((Exp.nexp (NExp.var "var3")), "seller"))))
 
 #check (eval_global test_program_1 g_test_Env)
 
-def trade_accept: P := (SEND_RECV ((Exp.FUNC  "delivery_date_of" (Exp.VAR "requested_title")), "seller") ("delivery_date", "buyer")
-  (END (Exp.VAR "delivery_date") "seller"))
+def trade_accept: P := (SEND_RECV ((Exp.nexp (NExp.func "delivery_date_of" #[])), "seller") ("delivery_date", "buyer"))
+  (END ((Exp.nexp (NExp.var "delivery_date")), "buyer"))
+-- def trade_accept: P := (SEND_RECV ((Exp.nexp (NExp.func "delivery_date_of" #[(Exp.nexp (NExp.var "requested_title"))]), "seller") ("delivery_date", "buyer"))
+--   (END ((Exp.nexp (NExp.var "delivery_date")), "seller")))
 
-def trade_decline: P :=  (END (Exp.CONSTANT 0) "buyer" )
+def trade_decline: P :=  (END ((Exp.nexp (NExp.const 0)), "buyer" ))
 
-def buyer_seller: P := SEND_RECV ((Exp.VAR "title"), "buyer") ("requested_title", "seller")
-  (SEND_RECV (Exp.FUNC "price_of" ((Exp.VAR "requested_title")), "seller") ("price", "buyer")
-  (IF ((Exp.SMALLER (Exp.VAR "price") (Exp.VAR "budget")), "buyer") trade_accept trade_decline))
+def buyer_seller: P := SEND_RECV ((Exp.sexp (SExp.var "title")), "buyer") ("requested_title", "seller")
+  (SEND_RECV (Exp.nexp (NExp.func "price_of" #[Exp.nexp (NExp.var "requested_title")]), "seller") ("price", "buyer")
+  (IF (Exp.bexp (BExp.smaller (NExp.var "price") (NExp.var "budget")), "buyer") trade_accept trade_decline))
 
-def buyer_seller2: P := SEND_RECV ((Exp.VAR "title"), "buyer") ("title", "seller") (END (Exp.VAR "title") "buyer" )
+def buyer_seller2: P := SEND_RECV (Exp.nexp (NExp.var "title"), "buyer") ("title", "seller") (END (Exp.nexp (NExp.var "title"), "buyer" ))
 
 def buyer_seller_type := GLOBAL_TO_TYPE buyer_seller
 
@@ -299,9 +312,6 @@ def buyer_seller_type := GLOBAL_TO_TYPE buyer_seller
 
 
 #eval buyer_seller_type
-
-
-#eval (buyer_seller_type)
 
 
 #eval (EPP_T buyer_seller_type "buyer")
@@ -336,3 +346,7 @@ def state_4_buyer_seller: L.group_eval_state := state_of seller_local_state [buy
 #eval (seller_local_program)
 #eval (EPP_P buyer_seller "seller")
 #eval (eval_local state_4_buyer_seller [])
+
+
+def func_prog: G.P := P.FUNC "test_func" #[Sorts.nat] (Exp.nexp (NExp.const 2)) (P.END (Exp.nexp (NExp.const 3), "anywhere"))
+#eval func_prog

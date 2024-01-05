@@ -8,6 +8,8 @@
 
 @[reducible] def located (α: Type): Type := α × Location
 
+def located.loc {α} (a: located α) := a.snd
+def located.val {α} (a: located α) := a.fst
 
 instance {α} [ToString α]: ToString (located α) where
   toString := fun x => (toString x.fst) ++ "@" ++ x.snd
@@ -39,11 +41,13 @@ inductive Sorts where
 | nat   : Sorts
 | string: Sorts
 | bool  : Sorts
+deriving BEq
 
 inductive Value where
 | nat   : Nat -> Value
 | string: String -> Value
 | bool  : Bool -> Value
+deriving BEq
 
 def Value.denote (v: Value) : Sorts := match v with
 | .nat _ => .nat

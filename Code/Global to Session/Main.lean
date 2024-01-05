@@ -44,8 +44,6 @@ def main (args : List String) : IO Unit := do
   let mode := args.get! 0
   --let port := (args.get! 1).toNat!.toUInt16
 
-
-
   let nc <- IO.Channel.new (α := Nat)
 
   let task1 <- IO.asTask (do IO.sleep 1000; IO.println "print task 1"; nc.sync.send 2; return 2;)
