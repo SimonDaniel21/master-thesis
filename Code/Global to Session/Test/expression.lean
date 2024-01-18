@@ -1,5 +1,8 @@
 import Test.type
 
+
+
+
 inductive Bop where
 | EQUAL: Bop
 | NOT: Bop
@@ -140,19 +143,19 @@ mutual
   | .func f_name args => do
     let env <- read
     let f_opt := (env.funcs).lookup f_name
-    return Value.nat 999
-    -- match f_opt with
-    -- | Option.none => throw (exp_error.unknown_var f_name)
-    -- | Option.some f =>
 
-    --   if (f.fst != args.size) then
-    --     throw (exp_error.wrong_args_num f.fst args.size)
-    --   else
-    --    --let arg_vals <- args.map (fun x => eval_exp x env)
-    --     return Value.nat 999
+    match f_opt with
+    | Option.none => throw (exp_error.unknown_var f_name)
+    | Option.some f =>
 
-    --   --let arg_vals <- n_eval_array args.toList env
-    --   --let arg_vals <- try_map args.toList (fun x => eval_exp x env)
+      if (f.fst != args.size) then
+        throw (exp_error.wrong_args_num f.fst args.size)
+      else
+       --let arg_vals <- args.map (fun x => eval_exp x env)
+        return Value.nat 999
+
+      --let arg_vals <- n_eval_array args.toList env
+      --let arg_vals <- try_map args.toList (fun x => eval_exp x env)
 
 
   def eval_BExp: BExp -> ReaderT P_state (Except exp_error) Value
@@ -447,7 +450,7 @@ def test_env : P_state := (vars, [(add_one)])
 #eval vars
 
 
-def e_1: Exp := Exp.nexp (NExp.multiply (NExp.plus (NExp.const 3) (NExp.const 34)) (NExp.const 2))
+def e_1: Exp := .nexp (.multiply (NExp.plus (NExp.const 3) (NExp.const 34)) (NExp.const 2))
 def e_2_nan: Exp := Exp.nexp (NExp.multiply (NExp.const 2) (NExp.divide (NExp.const 3) (NExp.const 0)))
 def e_3_unknown: Exp := Exp.nexp (NExp.multiply (NExp.var "v_unknown") (NExp.divide (NExp.const 3) (NExp.const 0)))
 def e_4_var: Exp := Exp.nexp (NExp.minus (NExp.var "v1") (NExp.divide (NExp.const 4) (NExp.const 2)))
@@ -494,4 +497,77 @@ def faraway2 := 3
 
 def test_array: List Exp := [Exp.nexp (NExp.const 5), Exp.sexp (SExp.const "bla")]
 
-#eval n_eval_array test_array ([],[])
+--#eval n_eval_array test_array ([],[])
+
+def my_expr_type := List Value -> Value
+def my_inc (args: List Value): Value :=
+  let args_opt := args[0]?
+  match args_opt with
+  | some arg0 => match arg0 with
+    | .nat n => Value.nat (n+1)
+    | _ => Value.string "error"
+  | none => Value.string "missing argument"
+
+def my_inc_actual: Nat -> Nat := fun x => x+1
+
+--def magic (arg_types: List Sorts) (res_type: Sorts): fun_type ->  List Value -> Value :=
+
+
+--#eval my_inc [Value.string ""]
+-- from https://bor0.wordpress.com/2019/03/19/writing-a-lambda-calculus-evaluator-in-haskell/
+inductive Term where
+| var: String -> Term
+| abs: String -> Term -> Term
+| app: Term -> Term -> Term
+deriving BEq
+
+def Term_toString: Term -> String
+| .var x => s!"'{x}'"
+| .abs x t => s!"λ{x}" ++ Term_toString (t)
+| .app t1 t2 => Term_toString (t1) ++ " (" ++ Term_toString (t2) ++ ")"
+
+instance: ToString Term where
+  toString := Term_toString
+
+
+def freeVars: Term -> List String
+| .var x => [x]
+| .abs x t =>  ((freeVars t).eraseDups).erase x
+| .app t1 t2 => freeVars t1 ++ freeVars t2
+
+def subst: String -> Term -> Term -> Except String Term
+| x, (.var v), new_val =>
+  if (x == v) then
+    return new_val
+  else
+    return .var v
+| x, (.abs y t1), new_val =>
+  if (x == y) then
+    return .abs y t1
+  else if ((x != y) &&¬(x∈(freeVars new_val))) then
+    throw (s!"cannot substitue '{x}' in term '{t1}'")
+  else
+    do
+    return .abs y (<- subst x t1 new_val)
+| x, (.app t1 t2), new_val => return .app (<- subst x t1 new_val) (<- subst x t2 new_val)
+
+def eval: Term -> Except String Term
+| .app (.abs x t12) v2@(.abs _ _) => subst x t12 v2
+| .app v1@(.abs _ _) t2 => do
+  let t2' <- eval t2
+  return .app v1 t2'
+| .app t1 t2 => do
+  let t1' <- eval t1
+  return .app t1' t2
+| _ => throw "no rule applies"
+
+
+
+def term1: Term := .abs "f" (.abs "x" (.var "x"))
+
+def term2: Term := .abs "f" (.abs "x" (.var "y"))
+
+#eval s!"{(eval term1)}"
+#eval s!"{(eval (.app term1 term2))}"
+
+#eval ()

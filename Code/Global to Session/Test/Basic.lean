@@ -3,5 +3,7 @@ def main : IO Unit := do
   IO.println "Hello, world!"
 
 
-#check BaseIO.asTask
+#check BaseIO.
+
+#check BaseIO.
 --- Channels?

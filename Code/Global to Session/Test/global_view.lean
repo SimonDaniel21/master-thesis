@@ -13,7 +13,7 @@ namespace G
   | IF : located Exp -> P -> P -> P
   | SEND_RECV    : located Exp -> located Variable -> P -> P
   | COMPUTE (v: Variable) (e: Exp) (a: Location) :   P -> P
-  | FUNC      : Function -> Array Sorts -> Exp -> P -> P
+  | def_func      : Function -> Array Sorts -> Exp -> P -> P
   | END     : located Exp -> P
 
   inductive T where
@@ -45,7 +45,7 @@ def GLOBAL_TO_TYPE: P -> T
 | IF (_e, el) opt_a opt_b =>  T.BRANCH el (GLOBAL_TO_TYPE opt_a) (GLOBAL_TO_TYPE opt_b)
 | SEND_RECV (_e, sender) (_v, receiver) p => T.SEND_RECV sender receiver Sorts.nat (GLOBAL_TO_TYPE p)
 | COMPUTE _ _ _ p => (GLOBAL_TO_TYPE p)
-| FUNC _ _ _ p => (GLOBAL_TO_TYPE p)
+| def_func _ _ _ p => (GLOBAL_TO_TYPE p)
 | END _ => T.END
 
 
@@ -58,7 +58,7 @@ def GP_TO_STRING (i: Nat) (p: P):  String :=
   | SEND_RECV (e, sender) (v, receiver) p =>
     v ++ "@" ++ receiver ++ " <= " ++ toString e ++  "@" ++ sender ++ "\n" ++ (GP_TO_STRING i p)
   | END (result, l) => toString result ++ "@" ++ l
-  | FUNC n as e p => n ++ toString as ++ " := " ++ toString e ++ "\n" ++ (GP_TO_STRING i p)
+  | def_func n as e p => n ++ toString as ++ " := " ++ toString e ++ "\n" ++ (GP_TO_STRING i p)
   | COMPUTE v e l p => v ++  "@" ++ l ++ " <= " ++ (Exp_toString e) ++ " @" ++ l ++ "\n" ++ (GP_TO_STRING i p)
   leading_spaces ++ content
 
@@ -159,7 +159,7 @@ def eval_global: P -> Eval_res
         | .error err => throw (Eval_error.Exp_error e err)
 
       | Option.none => throw (Eval_error.unknown_Location a)
-  | FUNC n as e p =>
+  | def_func n as e p =>
     do
       throw (Eval_error.Exp_error e exp_error.division_by_zero)
   | IF (e, el) opt_a opt_b =>
@@ -203,7 +203,7 @@ def result_location: G.P -> Location
   | SEND_RECV _ _ p => result_location p
   | END (_, l) => l
   | COMPUTE _ _ _ p => result_location p
-  | FUNC _ _ _ p => result_location p
+  | def_func _ _ _ p => result_location p
 
 def participants: G.P -> List Location
   | IF (_, el) opt_a opt_b => combine [(participants opt_b), (participants opt_a), [el]]
@@ -211,7 +211,7 @@ def participants: G.P -> List Location
     combine [(participants p ), [receiver, sender]]
   | END (_, l) => [l]
   | COMPUTE _v _e l _p =>[l]
-  | FUNC _n _as _e _p => []
+  | def_func _n _as _e _p => []
 
 
 
@@ -248,7 +248,7 @@ def EPP_P (prog: G.P) (l: Location) (bi: Nat := 0): L.P :=
       L.P.COMPUTE v e (EPP_P p l)
     else
       EPP_P p l
-  | FUNC n as e p =>
+  | def_func n as e p =>
     L.P.FUNC n as e (EPP_P p l)
 
 def EPP_T (gt: G.T) (l: Location): L.T :=
@@ -348,5 +348,30 @@ def state_4_buyer_seller: L.group_eval_state := state_of seller_local_state [buy
 #eval (eval_local state_4_buyer_seller [])
 
 
-def func_prog: G.P := P.FUNC "test_func" #[Sorts.nat] (Exp.nexp (NExp.const 2)) (P.END (Exp.nexp (NExp.const 3), "anywhere"))
+def func_prog: G.P := P.def_func "test_func" #[Sorts.nat] (Exp.nexp (NExp.const 2)) (P.END (Exp.nexp (NExp.const 3), "anywhere"))
 #eval func_prog
+
+
+
+inductive Network (α)
+| send : α -> Network α
+| recv : α -> Network α
+| run : α ->  Network α
+
+def Network.prog: Network -> IO Unit
+| .send t v => IO.println "sends"
+| .recv t v => IO.println "receives"
+| .run t v => do
+  IO.println "runs"
+  v
+
+def Network.send {t} (val:t):  Network (IO t) :=
+
+def bind_Network:  Network (IO α) → ((IO α) → Network (IO β)) → Network (IO β)
+| .send v, f => f v
+| .recv v, f => f v
+| .run prog, f => f prog
+
+instance: Monad (with_logs String) where
+  bind := bind_with_logs
+  pure := fun x => {value := x, logs := []}

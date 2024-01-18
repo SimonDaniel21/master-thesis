@@ -71,6 +71,7 @@ end L
 open L
 open P
 
+
 def LOCAL_TO_TYPE: L.P -> L.T
   | IF l opt_1 opt_2 => T.IF (LOCAL_TO_TYPE opt_1) (LOCAL_TO_TYPE opt_2)
   | SEND _e v receiver p => T.SEND receiver (LOCAL_TO_TYPE p)
@@ -275,7 +276,7 @@ partial def eval_local (s: group_eval_state): ExceptT eval_error (StateM trace) 
     let evaluation := eval_exp res_Exp s.current.env
     match evaluation with
     | .ok r =>
-      let located_res := (r, s.current.loc)
+      let located_res := r @ s.current.loc
       let s := {s with results := s.results.concat located_res}
       let swap_state_opt := finish_current s r
       match swap_state_opt with
@@ -349,11 +350,11 @@ def test_state : group_eval_state := state_of lstate_3_test []
 
 
 #eval (LOCAL_TO_TYPE lp_1_sending)
-#eval (eval_local state_1_send_then_receive [])
+-- #eval (eval_local state_1_send_then_receive [])
 
-#eval (LOCAL_TO_TYPE lp_2_receiving)
-#eval (eval_local state_2_only_receive [])
+-- #eval (LOCAL_TO_TYPE lp_2_receiving)
+-- #eval (eval_local state_2_only_receive [])
 
-#eval (eval_local state_3_only_send [])
+-- #eval (eval_local state_3_only_send [])
 
-#eval (eval_local test_state [])
+-- #eval (eval_local test_state [])
