@@ -98,7 +98,6 @@ def Socket.send_ (sock: Socket) (msg: t) [Serialize t]: IO Unit := do
 
 
 def Socket.SockAddr4.connect_to (addr: address): IO Socket := do
-  IO.println s!"connect to: {addr}"
   let sock ← Socket.mk .inet .stream
   repeat
     try
@@ -109,7 +108,6 @@ def Socket.SockAddr4.connect_to (addr: address): IO Socket := do
   return sock
 
 def Socket.SockAddr4.listen_on (addr: address): IO Socket := do
-  IO.println s!"binding on: {addr}"
   let sock ← Socket.mk .inet .stream
   sock.bind addr
   sock.listen 1

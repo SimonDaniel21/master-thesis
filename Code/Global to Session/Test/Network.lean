@@ -16,13 +16,10 @@ def local_cfg_for: String -> List String -> UInt16 -> Cfg
     [((loc, l), .v4 ((.mk 127 0 0 1)) p)] ++ local_cfg_for loc ls (p+1)
 
 
-def init_net: String -> List String -> UInt16 -> Cfg
-| _, [], _ => []
-| loc, l::ls, p =>
-  if (l == loc) then
-    local_cfg_for loc ls p
-  else
-    [((loc, l), .v4 ((.mk 127 0 0 1)) p)] ++ local_cfg_for loc ls (p+1)
+def local_cfg: (locs: List String) -> UInt16 -> (missing: List String := locs) -> Cfg
+| _, _, [] => []
+| all, p, l::ls => local_cfg_for l all p ++ local_cfg all (p + UInt16.ofNat (all.length - 1)) ls
+
 
 class T (α: Type) where
   fn: Unit
@@ -81,8 +78,8 @@ instance: Monad Network where
   pure x := Network.Return x
   bind  := Network.bind
 
-instance (loc: String) (c: Cfg): MonadLift Network IO where
-  monadLift := fun x => Network.run x loc c
+instance (loc: String) (n: Net): MonadLift Network IO where
+  monadLift := fun x => Network.run x loc n
 
 
 def toNetwork (eff: NetEff a): Network a :=
@@ -93,23 +90,23 @@ def recv {a:Type} (loc: String) [Serialize a]:= toNetwork (NetEff.recv loc (a:=a
 
 def data: UInt16 := 2
 
-def Net_Alice: Network Nat := do
-  send "eve" 55
-  --let res: Nat <- recv "alice"
-  return 4
+def Net_Alice (s: String): Network Nat := do
+  send "eve" (s ++ "-alice")
+  let res: Nat <- recv "bob"
+  return res
 
 def Net_Bob: Network (Unit) := do
-  --let res: Nat <- recv "bob"
-  send "eve" (3)
+  let s: String <- recv "eve"
+  send "bob" (s ++ "-bob")
 
 def Net_Eve: Network Unit := do
-  let res: Nat <- recv "eve"
-  --send "alice" (res+1)
+  let s: String <- recv "alice"
+  send "eve" (s ++ "-eve")
 
 
-def test_cfg := init_net "alice" ["alice", "bob", "eve", "", "2"] 6665
+def test_cfg := local_cfg ["alice", "bob", "eve"] 6665
 
-#eval test_cfg.length
+#eval test_cfg
 --2-2
 --3-6
 --4-12
@@ -120,15 +117,17 @@ def init_channel (loc sender receiver: String) (addr: address):  IO (Option Chan
   if sender == receiver then
     throw (IO.Error.userError "cannot init a channel where sender == receiver")
   else if (loc == sender) then
+    IO.println s!"waiting for {sender} -> {receiver}"
     let sock <- addr.connect_to
     return some ((sender,receiver), sock)
   else if (loc == receiver) then
+    IO.println s!"waiting for {sender} -> {receiver}"
     let sock <- addr.listen_on
     return some ((sender,receiver), sock)
   else return none
 
 
--- epp for initializing fully meshed network socketsq
+-- epp for initializing fully meshed network sockets
 def init_network: Cfg -> String -> IO Net
 | ((sender, receiver), addr)::as, loc => do
   let chn_opt <- init_channel loc sender receiver  addr
@@ -138,18 +137,20 @@ def init_network: Cfg -> String -> IO Net
     return [chnl] ++ rest
   | none => init_network as loc
 | [], _ => do
+  IO.println "finished network initilization"
   return []
 
 
 def main (args : List String): IO Unit := do
 
   let mode := args.get! 0
+  let net <- init_network test_cfg mode
   if mode == "alice" then
-    let r <- Net_Alice.run test_cfg
+    let r <- (Net_Alice (args.get! 1)).run  "alice" net
     IO.println (s!"res {Serialize.pretty r}")
   else if mode == "bob" then
-    Net_Bob.run test_cfg
+    Net_Bob.run "bob" net
   else if mode == "eve" then
-    Net_Eve.run test_cfg
+    Net_Eve.run "eve" net
   else
     IO.println "Unknown Location"
