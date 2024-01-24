@@ -1,7 +1,16 @@
 import Socket
 
+
+
 -- millis to wait for resend after a failed send try
 def send_timeout_duration: UInt32 := 200
+
+
+
+def String.toBool?: String -> Option Bool
+| "false" => some false
+| "true" => some true
+| _ => none
 
 def list_to_string_seperated_by (l: List String) (s: String): String :=
   match l with
@@ -48,10 +57,28 @@ def Nat.from_bytes: from_bytes_t Nat:= fun bs => do
     return nat
   | none => throw "received unconvertable nat"
 
+#eval toString true
+
+
+def Bool.to_bytes: to_bytes_t Bool := fun x => (toString x).to_bytes
+
+def Bool.from_bytes: from_bytes_t Bool := fun bs => do
+  let str <- String.from_bytes bs
+  let bool_opt := String.toBool? str
+  match bool_opt with
+  | some b =>
+    return b
+  | none => throw "received unconvertable nat"
+
 instance: Serialize Nat where
   from_bytes := Nat.from_bytes
   to_bytes := Nat.to_bytes
   type_name := "Nat"
+
+instance: Serialize Bool where
+  from_bytes := Bool.from_bytes
+  to_bytes := Bool.to_bytes
+  type_name := "Bool"
 
 instance: Serialize String where
   from_bytes := String.from_bytes
@@ -108,7 +135,7 @@ def Socket.recv_val (sock: Socket) (max: USize := 4096) [Serialize t]: IO t := d
   let msg := Serialize.from_bytes recv
   match msg with
   | .ok val =>
-    IO.println s!"recv: {msg}"
+    --IO.println s!"recv: {msg}"
     return val
   | .error e => throw (IO.Error.userError e)
 

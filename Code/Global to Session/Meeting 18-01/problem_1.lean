@@ -78,10 +78,5 @@ def fn (a b:Nat) (p : (a!=b) := by decide) :=
 #check fn 2 4
 #eval fn 2 2 -- this should not
 
-mutual
-  inductive A: Type -> Type 1 where
-  | one: B α -> A α
-
-  inductive B: Type -> Type 1 where
-  | two (other:Type) : A other -> B α
-end
+inductive B (α:Type) where
+  | two (other:Type) : B other -> B α

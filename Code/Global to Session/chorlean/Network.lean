@@ -31,7 +31,7 @@ def fn: A -> Unit
 | A.e v => ()
 
 inductive NetEff : Type -> Type 1 where
-| Run {a: Type} [Serialize a]:  IO a -> NetEff a
+| Run {a: Type}:  IO a -> NetEff a
 | Send {a: Type} [Serialize a]: String -> a -> NetEff Unit
 | Broadcast {a: Type} [Serialize a]: a -> NetEff Unit
 | Recv {a: Type} [Serialize a]: String -> NetEff a
@@ -84,7 +84,6 @@ def NetEff.run : NetEff a -> String -> Net -> IO a
 
 def Network.run : Network a -> String -> Net ->  IO a
 | Do eff next, loc, net => do
-  IO.println s!"{eff.toString loc}"
   let res <- eff.run loc net
   (next res).run loc net
 | Return v, _, _ => do
@@ -106,7 +105,7 @@ def toNetwork (eff: NetEff a): Network a :=
   Network.Do eff (Network.Return (a:=a))
 
 
-def run {a:Type} (comp: IO a) [Serialize a]:= toNetwork (NetEff.Run comp)
+def run {a:Type} (comp: IO a) := toNetwork (NetEff.Run comp)
 def send {a:Type} (loc: String) (v:a) [Serialize a]:= toNetwork (NetEff.Send loc v)
 def broadcast {a:Type} (v:a) [Serialize a]:= toNetwork (NetEff.Broadcast v)
 def recv {a:Type} (loc: String) [Serialize a]:= toNetwork (NetEff.Recv loc (a:=a))

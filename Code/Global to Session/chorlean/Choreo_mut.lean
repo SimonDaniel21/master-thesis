@@ -1,7 +1,7 @@
 import Test.my_utils
 import chorlean.Network
 
-inductive LocVal (α: Type) (loc: String) [Serialize α] where
+inductive LocVal (α: Type) (loc: String) where
 | Wrap: α -> LocVal α loc
 | Empty: LocVal α loc
 
@@ -10,25 +10,30 @@ instance [Serialize a]: ToString (LocVal a l) where
     | .Wrap v => toString v ++ "@" ++ toString l
     | .Empty => "Empty"
 
-def wrap {a} (v:a) (l: String)[Serialize a]: LocVal a l:=
+def wrap {a} (v:a) (l: String): LocVal a l:=
   LocVal.Wrap v
 
-infixl:55 "@" => fun (a:Type) (l:String) [Serialize a] => LocVal a l
+infixl:55 "@" => fun (a:Type) (l:String)  => LocVal a l
 
-def unwrap [Serialize a]: (LocVal a l) -> a
+
+def exists_locally: LocVal a l -> Bool
+| LocVal.Wrap _ =>  true
+| LocVal.Empty => false
+
+
+def unwrap (lv: LocVal a l) (_ex: exists_locally lv :=sorry):  a := match lv with
 | LocVal.Wrap v =>  v
-| LocVal.Empty => panic!"tried to unwrap Value from different Location, this should NOT happen in an well typed program!"
 
-
-def Unwrap (l:String) :=   {a:Type} -> [Serialize a] -> LocVal a l -> a
+def Unwrap (l:String) :=   {a:Type} -> LocVal a l -> a
 
 
 
 mutual
   inductive ChorEff: Type -> Type 1 where
   | Send_recv [Serialize a]: {sender:String} -> LocVal a sender -> (receiver:String) -> ChorEff (LocVal a receiver)
-  | Local {a:Type} [Serialize a]: (loc:String) -> (Unwrap loc -> IO b) -> ChorEff (LocVal b loc)
-  | Cond [Serialize a]: (decider:String) -> LocVal a decider -> (a -> Choreo b) -> ChorEff b
+  | Local : (loc:String) -> (Unwrap loc -> IO a) -> ChorEff (LocVal a loc)
+  | Calc : (loc:String) -> (Unwrap loc -> a) -> ChorEff (LocVal a loc)
+  | Cond [Serialize a]: LocVal a decider -> (a -> Choreo b) -> ChorEff b
 
   inductive Choreo: Type -> Type 1  where
   | Do :  ChorEff b -> (b -> Choreo a) -> Choreo a
@@ -45,7 +50,9 @@ def toChoreo (eff: ChorEff a) : Choreo a :=
    Choreo.Do eff (Choreo.Return)
 
 def send_recv {a:Type} [Serialize a] (vl: LocVal a sender) (receiver:String) (_dont_send_to_yourself: sender != receiver := by decide):= toChoreo (ChorEff.Send_recv vl receiver)
-def locally {a:Type} [Serialize a]  (loc: String) (comp: (Unwrap loc) -> IO b) := toChoreo (ChorEff.Local (a:=a) loc comp)
+def locally {a:Type} (loc: String) (comp: (Unwrap loc) -> IO b) := toChoreo (ChorEff.Local loc comp)
+def compute {a:Type} (loc: String) (comp: (Unwrap loc) -> b) := toChoreo (ChorEff.Calc loc comp)
+def branch {a:Type} [Serialize a] (lv: LocVal a decider) (cont: a -> Choreo b):= toChoreo (ChorEff.Cond lv cont)
 
 
 infixl:55 "~>" => send_recv
@@ -77,17 +84,25 @@ mutual
     else
       return .Empty
   | ChorEff.Local l1 comp, l2 => do
-    if (l1 == l2) then
-      let res <- run (comp unwrap)
+    if j:( l1 == l2) then
+      let res <- run (comp (unwrap))
+      return wrap res l1
+    else
+      return .Empty
+  | ChorEff.Calc l1 comp, l2 => do
+    if j:( l1 == l2) then
+      let res := (comp (unwrap))
       return wrap res l1
     else
       return .Empty
   | ChorEff.Cond lv fn (decider:=decider), loc => do
     if (loc == decider) then
-     (fn (unwrap lv)).epp loc
+      let choice := (unwrap lv)
+      broadcast choice
+      (fn (unwrap lv)).epp loc
     else
-      let res <- (recv decider)
-      (fn res).epp loc
+      let choice <- (recv decider)
+      (fn choice).epp loc
 
 
 
@@ -118,7 +133,7 @@ def fn2: fn_t -> Unit := fun x => let temp:= x 33
   let temp2 := x ""
   ()
 
-def silent_post: Choreo (LocVal String "alice"):= do
+def silent_post: Choreo (String @"alice"):= do
 
   let alice_nat: LocVal Nat "alice" := wrap 2 "alice"
   let alice_string := wrap "hello" "alice"
@@ -131,58 +146,74 @@ def silent_post: Choreo (LocVal String "alice"):= do
   )
   let temp <- toChoreo test
 
-  -- let input: LocVal String "alice" <- locally "alice" (fun un => do
-  --   let test :=  toString (un alice_nat) ++ un alice_string
-  --   IO.println "enter a message"
-  --   let stdin <- IO.getStdin
-  --   return <- stdin.getLine
-  -- )
-  --let msg <- locally "alice" fun un => return (un input) ++ "-alice_mut"
-
-  --let msg <- send_recv msg "eve"
-  --let msg <- locally "eve" fun un => return (un msg) ++ "-eve"
-
-  --let msg <- send_recv msg "bob"
-  --let msg <- locally "bob" fun un => return (un msg) ++ "-bob"
-
-  --let msg <- send_recv msg "alice"
-  return .Empty
-
-def book_seller: Choreo (LocVal String "buyer"):= do
-  let stdin_buyer <- locally "buyer" fun _ => return <- IO.getStdin
-
-  let title <- locally "buyer" (fun _ => do
-    IO.println "enter a book title:"
+  let input: LocVal String "alice" <- locally (a:= String) "alice" (fun un => do
+    let test :=  toString (un alice_nat) ++ un alice_string
+    IO.println "enter a message"
     let stdin <- IO.getStdin
     return <- stdin.getLine
   )
-  let title <- title ~> "seller"
-  let price <- locally "seller" (a:= Nat) (fun un => if (un title) == "Moby Dick" then return 100 else return 200)
-  let msg <- locally "alice" (a:=String) fun un => return (un input) ++ "-alice_mut"
+  let msg <- locally  (a:= String) "alice" fun un => return (un input) ++ "-alice_mut"
 
   let msg <- send_recv msg "eve"
-  let msg <- locally "eve" fun un => return (un msg) ++ "-eve"
+  let msg <- locally (a:= String)  "eve" fun un => return (un msg) ++ "-eve"
 
   let msg <- send_recv msg "bob"
-  let msg <- locally "bob" fun un => return (un msg) ++ "-bob"
+  let msg <- locally (a:= String)  "bob" fun un => return (un msg) ++ "-bob"
 
   let msg <- send_recv msg "alice"
   return msg
 
 
 
+def budget := wrap 150 "buyer"
+
+def book_seller: Choreo (Option (LocVal String "buyer")):= do
+
+  let title <- locally "buyer" (a:=String) (fun _ => do
+    IO.println "enter a book title:"
+    let stdin <- IO.getStdin
+    let str <-stdin.getLine
+    return str.dropRight 1
+  )
+  let title <- title ~> "seller"
+  let price <- compute "seller" (a:= Nat) fun un => if (un title) == "Faust" then 100 else 200
+  let price <- price ~> "buyer"
+
+  let _ <- locally "seller" (a:=Unit) (fun un => do
+    IO.println s!"got book title: {un title}"
+
+  )
+  let decision: LocVal Bool "buyer" <- compute "buyer" (a:=Bool) fun un => (un budget >= un price)
+
+  branch decision (fun x => match x with
+  | true => do
+    let date <- locally "seller" (a:=String) (fun _ => do
+      IO.println "enter the delivery date:"
+      let stdin <- IO.getStdin
+      return <- stdin.getLine
+    )
+    let date <- date ~> "buyer"
+    return some date
+  | false => do
+    return none
+  )
+
+
+
+
+
 def client_epp (input: Nat) := (testChor (wrap input "client")).epp "client"
 def server_epp := (testChor .Empty).epp "server"
 
-def test_cfg_2 := local_cfg ["client", "server"] 3333
+def bookseller_cfg := local_cfg ["buyer", "seller"] 3333
 
 #print client_epp
 
 def main (args : List String): IO Unit := do
   let mode := args.get! 0
-  let net <- init_network test_cfg mode
-  let res <- ((silent_post).epp mode).run mode net
-  IO.println (s!"res: {Serialize.pretty (unwrap res)}")
+  let net <- init_network bookseller_cfg mode
+  let res <- ((book_seller).epp mode).run mode net
+  IO.println (s!"res: {res}")
   return ()
 
 
