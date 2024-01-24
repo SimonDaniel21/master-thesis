@@ -159,9 +159,8 @@ def init_network: Cfg -> String -> IO Net
     return [chnl] ++ rest
   | none => init_network as loc
 | [], _ => do
-  IO.println "finished network initilization"
+  IO.println "finished network initilization\n"
   return []
-
 
 
 def main_ (args : List String): IO Unit := do

@@ -5,6 +5,7 @@ package «test» where
 
   -- add package configuration options here
 
+lean_lib «chorlean» where
 lean_lib «Test» where
   -- add library configuration options here
 require socket from git
@@ -42,7 +43,17 @@ lean_exe network where
   supportInterpreter := true
 
 lean_exe choreo where
-  root := `chorlean.Choreo_mut
+  root := `chorlean.Choreo
+  moreLeancArgs := #["-fPIC"]
+  supportInterpreter := true
+
+lean_exe silent_post where
+  root := `chorlean.examples.silent_post
+  moreLeancArgs := #["-fPIC"]
+  supportInterpreter := true
+
+lean_exe bookseller where
+  root := `chorlean.examples.bookseller
   moreLeancArgs := #["-fPIC"]
   supportInterpreter := true
 
