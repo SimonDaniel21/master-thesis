@@ -27,26 +27,9 @@ instance {α} [ToString α]: ToString (located α) where
   toString := fun x => (toString x.val) ++ "@" ++ x.loc
 
 
-inductive loc_val_view (α: Type) where
-| val: α -> loc_val_view α
-| empty: loc_val_view α
 
-infixl:55 "@" => locate
-
-def wrap {α:Type} : (located α) -> Location -> loc_val_view α
-| lv, to => if(lv.loc == to) then
-    loc_val_view.val lv.val
-  else
-    loc_val_view.empty
-
-
-def unwrap {α:Type} : loc_val_view α -> Except String α
-| .val v => return v
-| .empty => throw "unwraping empty value"
 
 --def Unwrap (l:Location) := ∀ a locate a l -> a
-
-#eval (3@"client")
 
 inductive BranchChoice: Type
 | fst

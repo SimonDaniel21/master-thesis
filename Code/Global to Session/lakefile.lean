@@ -28,7 +28,6 @@ lean_exe generated where
   -- Remove this line if you do not need such functionality.
   supportInterpreter := true
 
-
 lean_exe prog_gen where
   root := `Test.ProgramGeneration
   moreLeancArgs := #["-fPIC"]
@@ -38,7 +37,12 @@ lean_exe prog_gen where
   supportInterpreter := true
 
 lean_exe network where
-  root := `Test.Network
+  root := `chorlean.Network
+  moreLeancArgs := #["-fPIC"]
+  supportInterpreter := true
+
+lean_exe choreo where
+  root := `chorlean.Choreo_mut
   moreLeancArgs := #["-fPIC"]
   supportInterpreter := true
 

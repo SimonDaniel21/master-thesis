@@ -36,6 +36,8 @@ open G
 open P
 
 
+
+
 def Type_Locations: T -> List Location
 | T.SEND_RECV sender receiver _dt t => ([sender, receiver] ++ Type_Locations t).eraseDups
 | T.BRANCH loc opt_a opt_b => ([loc] ++ Type_Locations opt_a ++ Type_Locations opt_b).eraseDups
@@ -350,28 +352,3 @@ def state_4_buyer_seller: L.group_eval_state := state_of seller_local_state [buy
 
 def func_prog: G.P := P.def_func "test_func" #[Sorts.nat] (Exp.nexp (NExp.const 2)) (P.END (Exp.nexp (NExp.const 3), "anywhere"))
 #eval func_prog
-
-
-
-inductive Network (α)
-| send : α -> Network α
-| recv : α -> Network α
-| run : α ->  Network α
-
-def Network.prog: Network -> IO Unit
-| .send t v => IO.println "sends"
-| .recv t v => IO.println "receives"
-| .run t v => do
-  IO.println "runs"
-  v
-
-def Network.send {t} (val:t):  Network (IO t) :=
-
-def bind_Network:  Network (IO α) → ((IO α) → Network (IO β)) → Network (IO β)
-| .send v, f => f v
-| .recv v, f => f v
-| .run prog, f => f prog
-
-instance: Monad (with_logs String) where
-  bind := bind_with_logs
-  pure := fun x => {value := x, logs := []}

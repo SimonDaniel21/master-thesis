@@ -119,7 +119,7 @@ def LPS_TO_Lean_Program (ps: List (located P)) (physical_mapping: List (Location
   | [] => return main_func
 
 inductive funky: Type -> Type where
-| func1 Nat: funky String
+| func1 Nat: funky Nat
 
 def func1: Type := fun (x:Nat) (y:Nat) => x+y
 def func2:= fun (s:String) => toString s

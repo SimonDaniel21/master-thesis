@@ -28,7 +28,7 @@ def pad_until (s: String) (i: Nat): String :=
 def to_bytes_t (α) := α -> ByteArray
 def from_bytes_t (α) := ByteArray -> Except String α
 
-class Serialize (a: Type) extends ToString a where
+class Serialize (a: Type) extends ToString a, Inhabited a where
   to_bytes: a -> ByteArray
   from_bytes: ByteArray -> Except String a
   type_name: String
@@ -69,21 +69,7 @@ instance: ToString address where
   toString x := s!"{x.addr}@{x.port}"
 
 
--- def Socket.SockAddr4.send (a: address) (msg: t) [Serialize t]: IO Unit := do
---   IO.println s!"send on: {a}"
---   let bytes := Serialize.to_bytes msg
---   let sock ← Socket.mk .inet .stream
---   repeat
---     try
---       sock.connect a
---       break
---     catch _ =>
---       IO.sleep send_timeout_duration
---   let sz ← sock.send bytes
---   sock.close
---   assert! sz == bytes.size.toUSize
-
-def Socket.send_ (sock: Socket) (msg: t) [Serialize t]: IO Unit := do
+def Socket.send_val (sock: Socket) (msg: t) [Serialize t]: IO Unit := do
   let bytes := Serialize.to_bytes msg
   let sz ← sock.send bytes
   assert! sz == bytes.size.toUSize
@@ -115,7 +101,7 @@ def Socket.SockAddr4.listen_on (addr: address): IO Socket := do
   return client
 
 
-def Socket.recv_ (sock: Socket) (max: USize := 4096) [Serialize t]: IO t := do
+def Socket.recv_val (sock: Socket) (max: USize := 4096) [Serialize t]: IO t := do
   let recv ← sock.recv max
   if recv.size == 0 then throw (IO.Error.otherError 2 "received msg with 0 bytes")
 
@@ -125,25 +111,6 @@ def Socket.recv_ (sock: Socket) (max: USize := 4096) [Serialize t]: IO t := do
     IO.println s!"recv: {msg}"
     return val
   | .error e => throw (IO.Error.userError e)
-
--- def Socket.SockAddr4.recv (addr: address) (max: USize := 4096) [Serialize t]: IO t := do
---   IO.println s!"recv on: {addr}"
---   let sock ← Socket.mk .inet .stream
---   sock.bind addr
---   sock.listen 1
---   let (client, _sa) ← sock.accept
---   sock.close
---   let recv ← client.recv max
---   client.close
-
---   if recv.size == 0 then throw (IO.Error.otherError 2 "received msg with 0 bytes")
-
---   let msg := Serialize.from_bytes recv
---   match msg with
---   | .ok val =>
---     IO.println s!"recv: {msg}"
---     return val
---   | .error e => throw (IO.Error.otherError 2 e)
 
 /-
 

@@ -8,6 +8,18 @@
 -- Aktion abbilden (send oder recv z.b), welche mit entsprechenden
 -- argumenten auf ein IO Programm abgebildet werdern können
 
+
+mutual
+  inductive A: (Type) -> Type 1 where
+  | Send_recv [ToString a]:  A a
+  | Local [ToString a]: String -> ((a -> a) -> IO a) -> ChorEff a
+  --| Cond [Serialize b]: LocVal b loc2 -> (b -> Choreo a) -> ChorEff a
+
+  inductive B  where
+  | Do :  ChorEff b -> (b -> Choreo a) -> Choreo a
+  | Return: a -> Choreo a
+end
+
 def Location := String
 
 def do_send (α:Type): α -> Location -> IO Unit := fun _ _ => do
@@ -42,7 +54,34 @@ def prog: IO Unit := do
   IO.println "start"
   let session := SessionType.send Nat "client" (.receive String "client" (.done))
   let step := session.next
-  receive "client"
-  IO programm
-  send 2 "client"
+  -- receive "client"
+  -- IO programm
+  -- send 2 "client"
   -- when calling next i have the type info of the next step, so i dont want to pattern match
+
+
+mutual
+  inductive I1 (a:Type) [i : ToString a]  where
+  | some: I2 a -> I1 a
+
+  inductive I2 (a:Type) [i : ToString a] where
+  | other: I2 a
+end
+
+inductive I3 (a:Type) [i : ToString a] where
+  | other: I3 a
+
+
+def fn (a b:Nat) (p : (a!=b) := by decide) :=
+  a + b
+
+#check fn 2 4
+#eval fn 2 2 -- this should not
+
+mutual
+  inductive A: Type -> Type 1 where
+  | one: B α -> A α
+
+  inductive B: Type -> Type 1 where
+  | two (other:Type) : A other -> B α
+end
