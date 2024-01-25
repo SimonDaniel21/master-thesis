@@ -5,15 +5,16 @@ inductive LocVal (α: Type) (loc: String) where
 | Wrap: α -> LocVal α loc
 | Empty: LocVal α loc
 
-instance [Serialize a]: ToString (LocVal a l) where
+
+infixl:55 "@" => LocVal
+
+instance [Serialize a]: ToString (a @ l) where
   toString := fun x => match x with
     | .Wrap v => toString v ++ "@" ++ toString l
     | .Empty => "Empty"
 
-def wrap {a} (v:a) (l: String): LocVal a l:=
+def wrap {a} (v:a) (l: String): a @ l:=
   LocVal.Wrap v
-
-infixl:55 "@" => fun (a:Type) (l:String)  => LocVal a l
 
 
 def exists_locally: LocVal a l -> Bool
@@ -21,19 +22,19 @@ def exists_locally: LocVal a l -> Bool
 | LocVal.Empty => false
 
 
-def unwrap (lv: LocVal a l) (_ex: exists_locally lv :=sorry):  a := match lv with
+def unwrap (lv: a @ l) (_ex: exists_locally lv :=sorry):  a := match lv with
 | LocVal.Wrap v =>  v
 
-def Unwrap (l:String) :=   {a:Type} -> LocVal a l -> a
+def Unwrap (l:String) :=   {a:Type} -> a @ l -> a
 
 
 
 mutual
   inductive ChorEff: Type -> Type 1 where
-  | Send_recv [Serialize a]: {sender:String} -> LocVal a sender -> (receiver:String) -> ChorEff (LocVal a receiver)
-  | Local : (loc:String) -> (Unwrap loc -> IO a) -> ChorEff (LocVal a loc)
-  | Calc : (loc:String) -> (Unwrap loc -> a) -> ChorEff (LocVal a loc)
-  | Cond [Serialize a]: LocVal a decider -> (a -> Choreo b) -> ChorEff b
+  | Send_recv [Serialize a]: {sender:String} -> a @ sender -> (receiver:String) -> ChorEff (a @ receiver)
+  | Local : (loc:String) -> (Unwrap loc -> IO a) -> ChorEff (a @ loc)
+  | Calc : (loc:String) -> (Unwrap loc -> a) -> ChorEff (a @ loc)
+  | Cond [Serialize a]: a @ decider -> (a -> Choreo b) -> ChorEff b
 
   inductive Choreo: Type -> Type 1  where
   | Do :  ChorEff b -> (b -> Choreo a) -> Choreo a
@@ -46,10 +47,10 @@ end
 def toChoreo (eff: ChorEff a) : Choreo a :=
    Choreo.Do eff (Choreo.Return)
 
-def send_recv {a:Type} [Serialize a] (vl: LocVal a sender) (receiver:String) (_dont_send_to_yourself: sender != receiver := by decide):= toChoreo (ChorEff.Send_recv vl receiver)
+def send_recv {a:Type} [Serialize a] (vl: a @ sender) (receiver:String) (_dont_send_to_yourself: sender != receiver := by decide):= toChoreo (ChorEff.Send_recv vl receiver)
 def locally (loc: String) (comp: (Unwrap loc) -> IO b) := toChoreo (ChorEff.Local loc comp)
 def compute (loc: String) (comp: (Unwrap loc) -> b) := toChoreo (ChorEff.Calc loc comp)
-def branch {a:Type} [Serialize a] (lv: LocVal a decider) (cont: a -> Choreo b):= toChoreo (ChorEff.Cond lv cont)
+def branch {a:Type} [Serialize a] (lv: a @ decider) (cont: a -> Choreo b):= toChoreo (ChorEff.Cond lv cont)
 
 
 infixl:55 "~>" => send_recv
