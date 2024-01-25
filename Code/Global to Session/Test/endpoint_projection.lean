@@ -4,7 +4,7 @@ import Test.expression
 
 
 def endpoint_projection (a: Agent): GLOBAL_PROGRAM -> LOCAL_PROGRAM
-  | (GLOBAL_PROGRAM.SEND_RECV c v sender receiver p) =>
+  | (G.P.SEND_RECV c v sender receiver p) =>
     if (a == sender) then LOCAL_PROGRAM.SEND c v receiver (endpoint_projection a p)
     else if a == receiver then LOCAL_PROGRAM.RECV c v sender (endpoint_projection a p)
     else (endpoint_projection a p)
