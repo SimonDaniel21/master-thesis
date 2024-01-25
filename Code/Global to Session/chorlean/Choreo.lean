@@ -47,8 +47,8 @@ def toChoreo (eff: ChorEff a) : Choreo a :=
    Choreo.Do eff (Choreo.Return)
 
 def send_recv {a:Type} [Serialize a] (vl: LocVal a sender) (receiver:String) (_dont_send_to_yourself: sender != receiver := by decide):= toChoreo (ChorEff.Send_recv vl receiver)
-def locally {a:Type} (loc: String) (comp: (Unwrap loc) -> IO b) := toChoreo (ChorEff.Local loc comp)
-def compute {a:Type} (loc: String) (comp: (Unwrap loc) -> b) := toChoreo (ChorEff.Calc loc comp)
+def locally (loc: String) (comp: (Unwrap loc) -> IO b) := toChoreo (ChorEff.Local loc comp)
+def compute (loc: String) (comp: (Unwrap loc) -> b) := toChoreo (ChorEff.Calc loc comp)
 def branch {a:Type} [Serialize a] (lv: LocVal a decider) (cont: a -> Choreo b):= toChoreo (ChorEff.Cond lv cont)
 
 

@@ -2,19 +2,19 @@ import chorlean.Choreo
 
 def silent_post: Choreo (String @"alice"):= do
 
-  let input: LocVal String "alice" <- locally (a:= String) "alice" (fun un => do
+  let input: LocVal String "alice" <- locally "alice" (fun un => do
     IO.println "enter a message"
     let stdin <- IO.getStdin
     return <- stdin.getLine
   )
 
-  let msg <- locally  (a:= String) "alice" fun un => return (un input) ++ "-alice_mut"
+  let msg <- locally "alice" fun un => return (un input) ++ "-alice_mut"
 
   let msg <- send_recv msg "eve"
-  let msg <- locally (a:= String)  "eve" fun un => return (un msg) ++ "-eve"
+  let msg <- locally "eve" fun un => return (un msg) ++ "-eve"
 
   let msg <- send_recv msg "bob"
-  let msg <- locally (a:= String)  "bob" fun un => return (un msg) ++ "-bob"
+  let msg <- locally "bob" fun un => return (un msg) ++ "-bob"
 
   let msg <- send_recv msg "alice"
   return msg
