@@ -14,6 +14,9 @@ def book_seller: Choreo (Option (String @"buyer")):= do
     return str.dropRight 1
   )
   let title' <- title ~> "seller"
+
+  let nor_title := unwrap title'
+
   let price <- compute "seller" fun un => if (un title') == "Faust" then 100 else 200
   let price <- price ~> "buyer"
 
@@ -23,7 +26,7 @@ def book_seller: Choreo (Option (String @"buyer")):= do
   )
   let decision: LocVal Bool "buyer" <- compute "buyer" fun un => (un budget >= un price)
 
-  branch decision (fun x => match x with
+  branch decision fun
   | true => do
     let date <- locally "seller" (fun _ => do
       IO.println "enter the delivery date:"
@@ -34,14 +37,13 @@ def book_seller: Choreo (Option (String @"buyer")):= do
     return some date
   | false => do
 
-    let _ <- locally "seller" (fun un => do
+    let _ <- locally "seller" (fun _un => do
       IO.println s!"the customer declined the purchase"
     )
     let _ <- locally "buyer" (fun un => do
       IO.println s!"{un title} has a price of {un price} exceeding your budget of {un budget}!"
     )
     return none
-  )
 
 
 def main (args : List String): IO Unit := do

@@ -5,6 +5,18 @@ inductive LocVal (α: Type) (loc: String) where
 | Wrap: α -> LocVal α loc
 | Empty: LocVal α loc
 
+def LocGroup := List String
+
+
+
+class DistWork (a b: Type) where
+  split: a -> Array b
+  reduce: List b -> a
+
+
+instance (a b: Type): DistWork (List a) b where
+  split: a
+
 
 infixl:55 "@" => LocVal
 
@@ -69,7 +81,7 @@ end
 def toChoreo (eff: ChorEff a) : Choreo a :=
    Choreo.Do eff (Choreo.Return)
 
-def send_recv {a:Type} [Serialize a] (vl: a @ sender) (receiver:String) (_dont_send_to_yourself: sender != receiver := by decide):= toChoreo (ChorEff.Send_recv vl receiver)
+def send_recv {a:Type} [Serialize a] (vl: a @ sender) (receiver:String) {_dont_send_to_yourself: sender != receiver }:= toChoreo (ChorEff.Send_recv vl receiver)
 def locally (loc: String) (comp: (Unwrap loc) -> IO b) := toChoreo (ChorEff.Local loc comp)
 def compute (loc: String) (comp: (Unwrap loc) -> b) := toChoreo (ChorEff.Calc loc comp)
 def branch {a:Type} [Serialize a] (lv: a @ decider) (cont: a -> Choreo b):= toChoreo (ChorEff.Cond lv cont)

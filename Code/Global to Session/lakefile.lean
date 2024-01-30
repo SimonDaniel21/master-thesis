@@ -57,6 +57,11 @@ lean_exe bookseller where
   moreLeancArgs := #["-fPIC"]
   supportInterpreter := true
 
+lean_exe bookseller2 where
+  root := `chorlean.examples.bookseller2
+  moreLeancArgs := #["-fPIC"]
+  supportInterpreter := true
+
 -- package foo where
 --   dependencies := #[{
 --     name := `socket

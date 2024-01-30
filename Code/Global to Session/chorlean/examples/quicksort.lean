@@ -1,16 +1,6 @@
 import chorlean.Choreo
 
-
-
-inductive I (s:String) where
-| some: a -> I s
-
-def fn3: Unit :=
-  let v: I := 3
-  ()
-
-
-def silent_post: Choreo (String @"alice"):= do
+def quicksort: Choreo ((List nat) @"alice"):= do
 
   let input: LocVal String "alice" <- locally "alice" (fun un => do
     IO.println "enter a message"
@@ -21,8 +11,8 @@ def silent_post: Choreo (String @"alice"):= do
 
   let msg <- locally "alice" fun un => return (un input) ++ "-alice_mut"
 
-
-
+  let msg <- msg :- "eve"
+  --let msg <- send_recv msg "eve"
   let msg <- locally "eve" fun un => return (un msg) ++ "-eve"
 
   let msg <- send_recv msg "bob"

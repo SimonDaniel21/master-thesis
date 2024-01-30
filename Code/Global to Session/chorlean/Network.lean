@@ -34,6 +34,7 @@ inductive NetEff : Type -> Type 1 where
 | Run {a: Type}:  IO a -> NetEff a
 | Send {a: Type} [Serialize a]: String -> a -> NetEff Unit
 | Broadcast {a: Type} [Serialize a]: a -> NetEff Unit
+| Broadcast_except {a: Type} [Serialize a]: List String -> a -> NetEff Unit
 | Recv {a: Type} [Serialize a]: String -> NetEff a
 
 inductive Network (a:Type) where
@@ -46,7 +47,7 @@ def NetEff.toString : NetEff a -> String -> String
 | NetEff.Send receiver v, sender=> s!"{sender} sends {Serialize.pretty v} to {receiver}"
 | NetEff.Recv sender (a:=b), receiver => s!"{receiver} receives {Serialize.type_name b} from {sender}"
 | NetEff.Broadcast  v, sender => s!"broadcast"
-
+| NetEff.Broadcast_except  v _, sender => s!"broadcast"
 
 
 instance (loc:String): ToString (NetEff a)  where
@@ -55,29 +56,45 @@ instance (loc:String): ToString (NetEff a)  where
 -- function that takes a Value, Net and LocString and returns a program that sends the value to
 -- all channels that the LocString can send to in the Net
 
+def dbg_prints := true
 
 def NetEff.run : NetEff a -> String -> Net -> IO a
-| NetEff.Run comp (a:=a), _loc, _net => comp
+| NetEff.Run comp (a:=a), _loc, _net => do
+  if dbg_prints then
+    IO.println s!"program at {_loc}"
+  comp
 | NetEff.Send receiver v, sender, c => do
+  if dbg_prints then
+      IO.println s!"{sender} -> {receiver} ({Serialize.pretty v})"
   let sock_opt := c.lookup (sender, receiver)
   match sock_opt with
   | some sock =>
     sock.send_val v
   | none =>
     throw (IO.Error.userError s!"cannot find addr {sender} x {receiver} in cfg for send")
-| NetEff.Recv sender, receiver, c => do
+| NetEff.Recv (a:=_t) sender, receiver, c => do
+  if dbg_prints then
+    IO.println s!"{sender} -> {receiver} :{Serialize.type_name _t}"
   let sock_opt := c.lookup (sender, receiver)
   match sock_opt with
   | some sock =>
     sock.recv_val
   | none =>
     throw (IO.Error.userError s!"cannot find location {sender} x {receiver} in cfg for receive")
-| NetEff.Broadcast v, loc, ((sender, _), sock)::cs => do
+| NetEff.Broadcast v, loc, ((sender, _receiver), sock)::cs => do
+
   if (loc == sender) then
+    if dbg_prints then
+      IO.println s!"{sender} -> {_receiver} ({Serialize.pretty v})"
+    sock.send_val v
+  (NetEff.Broadcast v).run loc cs
+| NetEff.Broadcast _, loc, [] => return ()
+| NetEff.Broadcast_except es v, loc, ((sender, _), sock)::cs => do
+  if (loc == sender && ! (es.contains sender)) then
     sock.send_val v
   else
     (NetEff.Broadcast v).run loc cs
-| NetEff.Broadcast _, loc, [] => return ()
+| NetEff.Broadcast_except _ _, loc, [] => return ()
 
 
 
@@ -108,7 +125,14 @@ def toNetwork (eff: NetEff a): Network a :=
 def run {a:Type} (comp: IO a) := toNetwork (NetEff.Run comp)
 def send {a:Type} (loc: String) (v:a) [Serialize a]:= toNetwork (NetEff.Send loc v)
 def broadcast {a:Type} (v:a) [Serialize a]:= toNetwork (NetEff.Broadcast v)
+def broadcast_except {a:Type} (es: List String) (v:a) [Serialize a]:= toNetwork (NetEff.Broadcast_except es v)
 def recv {a:Type} (loc: String) [Serialize a]:= toNetwork (NetEff.Recv loc (a:=a))
+def send_mult {a:Type} (locs: List String) (v:a) [Serialize a] : Network Unit := match locs with
+| [] => return ()
+| l::ls  => do
+  send l v
+  send_mult ls v
+
 
 def data: UInt16 := 2
 
