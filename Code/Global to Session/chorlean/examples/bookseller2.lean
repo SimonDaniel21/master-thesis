@@ -27,8 +27,7 @@ def split_50_50 (borrower lender: String) (j:borrower != lender :=by decide) (j2
     let share <- send_recv share lender j
     let accepts <- locally lender fun un => do
       IO.println s!"the buyer wants you to pay a share of {un share} for his book.\nDo you accept?(y/n):"
-      let stdin <- IO.getStdin
-      let str := (<-stdin.getLine).dropRight 1
+      let str <- IO.getLine
       return str == "y"
 
     let accepts <- send_recv accepts borrower j2
@@ -46,8 +45,7 @@ def pay_rest: negT  := fun budget price => do
   | x => do
     let accepts <- locally "friend" fun _ => do
       IO.println s!"the buyer wants you to pay a share of {x} for his book.\nDo you accept?(y/n):"
-      let stdin <- IO.getStdin
-      let str := (<-stdin.getLine).dropRight 1
+      let str <- IO.getLine
       return str == "y"
 
     let accepts <- accepts ~> "buyer"
@@ -58,9 +56,7 @@ def book_seller (negotiate: negT) : Choreo (Option (String @"buyer")):= do
 
   let title <- locally "buyer" (fun _ => do
     IO.println "enter a book title:"
-    let stdin <- IO.getStdin
-    let str <-stdin.getLine
-    return str.dropRight 1
+    return <- IO.getLine
   )
   let title' <- title ~> "seller"
 
@@ -79,8 +75,7 @@ def book_seller (negotiate: negT) : Choreo (Option (String @"buyer")):= do
   | true => do
     let date <- locally "seller" (fun _ => do
       IO.println "enter the delivery date:"
-      let stdin <- IO.getStdin
-      return <- stdin.getLine
+      return <- IO.getLine
     )
     let date <- date ~> "buyer"
     return some date
@@ -99,7 +94,7 @@ def main (args : List String): IO Unit := do
   let mode := args.get! 0
   let net <- init_network bookseller_cfg mode
   IO.println (s!"starting bookseller 50 50")
-  let res <- ((book_seller (split_50_50 "buyer" "seller")).epp mode).run mode net
+  let res <- ((book_seller (split_50_50 "buyer" "friend")).epp mode).run mode net
   IO.println (s!"res: {res}")
   IO.println (s!"\n\nstarting bookseller pay rest")
   let res <- ((book_seller pay_rest).epp mode).run mode net

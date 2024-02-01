@@ -24,16 +24,37 @@ def exists_locally: LocVal a l -> Bool
 | LocVal.Wrap _ =>  true
 | LocVal.Empty => false
 
+def isSome: Option x -> Bool
+| some _ => true
+| none => false
 
-def unwrap (lv: a @ l) (_ex: exists_locally lv :=sorry):  a := match lv with
+def safeSome : (o: Option a) -> (j:isSome o) -> a
+| some v, _ => v
+
+#check safeSome
+
+def UnwrapT := {a:Type} -> (o:Option a) -> (j:isSome o) -> a
+
+def unwrapInstance: @UnwrapT := safeSome
+
+def test := unwrapInstance (.some "hello")
+
+def unwrap (lv: a @ l) (j:exists_locally lv:=sorry):  a := match lv with
 | LocVal.Wrap v =>  v
 
 def Unwrap (l:String) :=   {a:Type} -> {locs: List String} -> (p:locs.contains l :=by decide) -> a @ locs -> a
 
---def test44 (locs: List String): Unwrap loc  :=  fun x ls => unwrap (locs:=ls)
+def ualice := Unwrap "alice"
 
+def testa: Unwrap "alice"  := fun p lv => unwrap lv
 
+def alice := "alice"
+def tlist := [alice, "bob"]
 
+def atAlice := wrap "hello" tlist
+
+def notatAlice := wrap "hello" ["bob", "eve"]
+def tets222:= testa (tlist.contains alice) atAlice
 
 mutual
   inductive ChorEff: Type -> Type 2 where

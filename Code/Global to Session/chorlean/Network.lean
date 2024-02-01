@@ -4,8 +4,13 @@ abbrev Cfg := List ((String × String) × (address))
 abbrev Channel := (String × String) × Socket
 
 abbrev Net:= List (Channel)
-def test: address :=  .v4 ((.mk 127 0 0 1)) 33
-def tc: Cfg := [(("client", "server"), test)]
+
+def HasChannel (s r: String) (net:Net) : Bool :=
+  let c_opt := net.lookup (s, r)
+  match c_opt with
+  | some _ => true
+  | none => false
+
 
 def local_cfg_for: String -> List String -> UInt16 -> Cfg
 | _, [], _ => []
@@ -16,9 +21,24 @@ def local_cfg_for: String -> List String -> UInt16 -> Cfg
     [((loc, l), .v4 ((.mk 127 0 0 1)) p)] ++ local_cfg_for loc ls (p+1)
 
 
+-- creates a fully meshed net configuration
 def local_cfg: (locs: List String) -> UInt16 -> (missing: List String := locs) -> Cfg
 | _, _, [] => []
 | all, p, l::ls => local_cfg_for l all p ++ local_cfg all (p + UInt16.ofNat (all.length - 1)) ls
+
+
+-- creates a net cfg from pairs of (Location) Strings, and an additional bool that,
+-- if set two true will create a channel in the opposing direction aswell
+def gen_cfg: (locs: List ((String × String) × Bool)) -> UInt16 -> Cfg
+| [], p => []
+| ((s, r), bidirectional)::ls, p =>
+  let cs := [((s, r), .v4 ((.mk 127 0 0 1)) p)]
+  if (bidirectional) then
+    let p := p+1
+    let cs := cs ++ [((r, s), .v4 ((.mk 127 0 0 1)) p)]
+    cs ++ gen_cfg ls (p+1)
+  else
+    cs ++ gen_cfg ls (p+1)
 
 
 class T (α: Type) where

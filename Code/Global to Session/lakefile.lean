@@ -62,6 +62,11 @@ lean_exe bookseller2 where
   moreLeancArgs := #["-fPIC"]
   supportInterpreter := true
 
+lean_exe auth where
+  root := `chorlean.examples.sso_auth
+  moreLeancArgs := #["-fPIC"]
+  supportInterpreter := true
+
 -- package foo where
 --   dependencies := #[{
 --     name := `socket

@@ -139,6 +139,19 @@ def Socket.recv_val (sock: Socket) (max: USize := 4096) [Serialize t]: IO t := d
     return val
   | .error e => throw (IO.Error.userError e)
 
+def IO.getLine: IO String := do
+  let stdin <- IO.getStdin
+  let str := (<-stdin.getLine).dropRight 1
+  return str
+
+def IO.getBool: IO Bool := do
+  let str <- IO.getLine
+  return str == "y"
+
+def IO.getNat: IO Nat := do
+  let str <- IO.getLine
+  return str.toNat!
+
 /-
 
 def combine {α: Type} (lst: List (List α)): List α :=
