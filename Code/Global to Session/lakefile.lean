@@ -12,6 +12,9 @@ require socket from git
   "https://github.com/hargoniX/socket.lean/" @ "main"
 --  "https://github.com/xubaiw/lean4-socket.git"
 
+require mathlib from git
+  "https://github.com/leanprover-community/mathlib4.git"
+
 @[default_target]
 lean_exe «test» where
   root := `Main

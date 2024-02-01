@@ -13,25 +13,41 @@ instance [Serialize a]: ToString (a @ l) where
     | .Wrap v => toString v ++ "@" ++ toString l
     | .Empty => "Empty"
 
-def wrap {a} (v:a) (l: String): a @ l:=
-  LocVal.Wrap v
 
-
-def exists_locally: LocVal a l -> Bool
+def notEmpty: LocVal a l -> Bool
 | LocVal.Wrap _ =>  true
 | LocVal.Empty => false
 
-def unwrap (lv: a @ l) (_ex: exists_locally lv := by decide):  a := match lv with
-| LocVal.Wrap v =>  v
+example : x < x + 1 := exact?%
+example : Nat := by exact?
 
-def Unwrap (l:String) := {a:Type} -> (lv: a @ l) -> (j: exists_locally lv) -> a
+abbrev ValidLocVal (α: Type) (loc: String) := {lv:(α @ loc) // notEmpty lv}
+
+def wrap {a} (v:a) (l: String): ValidLocVal a l:=
+  let lv := LocVal.Wrap v
+  --let p: notEmpty lv := by decide
+  ⟨LocVal.Wrap v , by exact sorry⟩
+
+--def ttt: ValidLocVal Nat "alice" := wrap 33 "alice"
+
+def unwrap (lv: ValidLocVal a l):  a :=
+  let ⟨lv,_⟩  := lv
+  match lv with
+| LocVal.Wrap v  =>  v
+
+def test := unwrap (⟨ LocVal.Wrap "hello" (loc:="alice"), by decide⟩ )
+#eval test
+
+def Unwrap (l:String) := {a:Type} -> (lv: a @ l) -> (ex: notEmpty lv := by decide) -> a
 
 def testa := Unwrap "inge"
 def inge := "inge"
 def testu: Unwrap inge := fun x p => unwrap x (l:="inge") p
-def testw := wrap 23 "inge"
+def testw1 := wrap 23 "inge"
+def testw2 (s:String) := wrap 23 s
 
-def testApp := testu testw
+--def proof: notEmpty testw1 := testw1
+
 
 def local_func (a:Type) (l:String):= (Unwrap l -> a)
 def local_prog (a:Type) (l:String):= (Unwrap l -> IO a)
@@ -49,10 +65,10 @@ end
 
 mutual
   inductive ChorEff: Type -> Type 1 where
-  | Send_recv [Serialize a]: {sender:String} -> (lv:a @ sender) -> (j:exists_locally lv := by decide) -> (receiver:String) -> ChorEff (a @ receiver)
+  | Send_recv [Serialize a]: {sender:String} -> (lv: ValidLocVal a sender) -> (receiver:String) -> ChorEff ((a @ receiver))
   | Local : (loc:String) -> (Unwrap loc -> IO a) -> ChorEff (a @ loc)
   | Calc : (loc:String) -> (Unwrap loc -> a) -> ChorEff (a @ loc)
-  | Cond [Serialize a]: (lv: a @ decider) -> (j:exists_locally lv := by decide) -> (a -> Choreo b) -> ChorEff b
+  | Cond [Serialize a]: (lv: a @ decider) -> (a -> Choreo b) -> ChorEff b
 
   inductive Choreo: Type -> Type 1  where
   | Do :  ChorEff b -> (b -> Choreo a) -> Choreo a
@@ -73,14 +89,16 @@ def Choreo.bind: Choreo α → (α → Choreo β) → Choreo β
   | Choreo.Return v, next' => next' v
 decreasing_by sorry
 
+
+
 instance: Monad Choreo where
   pure x := Choreo.Return x
   bind  := Choreo.bind
 
-def send_recv {a:Type} [Serialize a] (lv: a @ sender) (receiver:String) (p:exists_locally lv := by decide):= toChoreo (ChorEff.Send_recv lv p receiver)
-def locally (loc: String) (comp: (Unwrap loc) -> IO b) := toChoreo (ChorEff.Local loc comp)
+def send_recv {a:Type} [Serialize a] (lv: ValidLocVal a sender) (receiver:String) := toChoreo (ChorEff.Send_recv lv receiver)
+def locally (loc: String) (comp: (Unwrap loc) -> IO b) := toChoreo (@ChorEff.Local b loc comp)
 def compute (loc: String) (comp: (Unwrap loc) -> b) := toChoreo (ChorEff.Calc loc comp)
-def branch {a:Type} [Serialize a] (lv: a @ decider) (p:exists_locally lv := by decide) (cont: a -> Choreo b):= toChoreo (ChorEff.Cond lv p cont)
+def branch {a:Type} [Serialize a] (lv: a @ decider) (p:notEmpty lv := by decide) (cont: a -> Choreo b):= toChoreo (ChorEff.Cond lv p cont)
 
 -- def send_recv_locally {a:Type} [Serialize a] (sender receiver:String) (comp: (Unwrap sender) -> IO a) (p:exists_locally lv := by decide) (_dont_send_to_yourself: sender != receiver := by decide):= do
 --   let lv <- toChoreo (ChorEff.Local sender comp)
@@ -94,22 +112,23 @@ def branch {a:Type} [Serialize a] (lv: a @ decider) (p:exists_locally lv := by d
 
 mutual
   def ChorEff.epp: ChorEff a -> String -> Network a
-  | ChorEff.Send_recv (a:=a) lv p receiver  (sender:=sender), l => do
-    if k:(sender == receiver) then
-      return wrap (unwrap lv p) receiver
-    if (sender == l) then
-      send receiver (unwrap lv p)
+  | ChorEff.Send_recv (a:=a) lv receiver  (sender:=sender), l => do
+    if k:(l == sender && l == receiver) then
+      return  wrap (unwrap lv) receiver
+    if k:(sender == l) then
+      send receiver (unwrap lv)
       return .Empty
-    else if (receiver == l) then
+    else if k:(receiver == l) then
       let response <- (recv sender)
       return wrap response receiver
     else
       return .Empty
   | ChorEff.Local l1 comp, l2 => do
     if j:( l1 == l2) then
-      let un: Unwrap l1 := fun x p => unwrap x p
+      let un:= fun x p => unwrap x p
       let res <- run (comp (un))
-      return wrap res l1
+      let wrapped := wrap res l1
+      return wrapped
     else
       return .Empty
   | ChorEff.Calc l1 comp, l2 => do
@@ -118,11 +137,11 @@ mutual
       return wrap (comp (un)) l1
     else
       return .Empty
-  | ChorEff.Cond lv p fn (decider:=decider), loc => do
+  | ChorEff.Cond lv fn (decider:=decider), loc => do
     if (loc == decider) then
-      let choice := (unwrap lv p)
+      let choice := (unwrap lv)
       broadcast choice
-      (fn (unwrap lv p)).epp loc
+      (fn (unwrap lv)).epp loc
     else
       let choice <- (recv decider)
       (fn choice).epp loc
@@ -134,7 +153,7 @@ mutual
     Choreo.epp (next res) loc
 
 end
-decreasing_by sorry --TODO
+--decreasing_by sorry --TODO
 def wrapped := wrap 3 "bob"
 def unwrapped := unwrap wrapped (l:="bob")
 #eval unwrapped
@@ -148,6 +167,16 @@ notation:55 lv "~>" receiver => send_recv lv receiver
 
 
 def silent_post: Choreo (String @"alice"):= do
+  let localEffect := ChorEff.Local "steve" fun x => return ()
+  let localChoreo := toChoreo localEffect
+
+  let wrapped := wrap 3 "bob"
+  --let unwrapped := unwrap wrapped
+
+
+  let msg <- send_recv wrapped "eve"
+
+  let msg <- send_recv msg "bob"
 
   let input: LocVal String "alice" <- locally "alice" (fun un => do
     IO.println "enter a message"
@@ -155,10 +184,16 @@ def silent_post: Choreo (String @"alice"):= do
     return <- stdin.getLine
   )
 
-  let msg <- locally "alice" fun un => return (un input sorry) ++ "-alice_mut"
+  let input2: String @"alice" := wrap "3" "alice"
 
 
-  let msg <- send_recv msg "eve" sorry
+
+  let msg <- locally "alice" fun un => return (un input2) ++ "-alice_mut" ++ toString (un input)
+
+  let msg2 <- locally "alice" fun un => return (un msg)
+
+
+  let msg <- send_recv msg "eve"
 
   let msg <- locally "eve" fun un => return (un msg sorry) ++ "-eve"
 

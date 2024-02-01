@@ -40,6 +40,44 @@ def eval2: DSL -> Option Nat
     Option.some ((<- eval2 a) + (<- eval2 b))
 
 
+inductive I (a:Type) (s:String): Type where
+| some: a -> I a s
+| none: I a s
+
+def wrap {a:Type} (v:a) (s: String): I a s:=
+  I.some v
+
+def bigger_2 (n:Nat) := n < 2
+
+def Nat_bigger_2 := Subtype (n < 34)
+
+def inc_until_2: Nat -> { n // n <= 2 }
+| 0 => ⟨0, by simp⟩
+| 1 => ⟨1, by simp⟩
+| _ => ⟨2, Nat.le_refl _⟩
+
+
+variable (xx:Nat)
+def poof: inc_until_2 xx := by simp
+def funny: Nat -> (n:Nat and a proof involving n) -> ()
+
+
+def isSome: I a s -> Bool
+| I.some _ =>  true
+| I.none => false
+
+def unwrap (v: I a s) (_ex: isSome v := by decide):  a := match v with
+| I.some x =>  x
+
+
+def fn3: Nat -> (I Unit "alice")
+| 0 => .none
+| _ => .some ()
+
+def requires (i: I a s)  (_j: isSome i:= by decide):  Unit := match i with
+| .some _v => ()
+
+def temp := requires (fn3 4)
 
 --- Higher order Terms ---
 
