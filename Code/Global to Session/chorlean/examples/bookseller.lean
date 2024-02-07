@@ -1,6 +1,6 @@
 import chorlean.Choreo
 
-def bookseller_cfg := local_cfg ["buyer", "seller"] 3333
+def bookseller_cfg := gen_fullmesh_cfg ["buyer", "seller"]
 
 
 def book_seller: Choreo (Option (String @"buyer")):= do

@@ -6,9 +6,9 @@ import chorlean.Choreo
 
 def sso_cfg := gen_cfg
   [
-    (("client", "IP"), true),
-    (("service", "IP"), true)
-  ] 2230
+    (("client", "IP"), sym),
+    (("service", "IP"), sym)
+  ]
 
 structure Credentials where
   username: String @ "client"

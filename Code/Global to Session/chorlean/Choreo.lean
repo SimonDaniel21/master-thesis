@@ -16,12 +16,9 @@ instance [Serialize a]: ToString (a @ l) where
 def wrap {a} (v:a) (l: String): a @ l:=
   LocVal.Wrap v
 
-
-
 def exists_locally: LocVal a l -> Bool
 | LocVal.Wrap _ =>  true
 | LocVal.Empty => false
-
 
 def unwrap (lv: a @ l) (_ex: exists_locally lv :=sorry):  a := match lv with
 | LocVal.Wrap v =>  v
@@ -85,7 +82,8 @@ instance: Monad Choreo where
   pure x := Choreo.Return x
   bind  := Choreo.bind
 
-def send_recv {a:Type} [Serialize a] (vl: a @ sender) (receiver:String) (_dont_send_to_yourself: sender != receiver := by decide):= toChoreo (ChorEff.Send_recv vl receiver)
+--def send_recv {a:Type} [Serialize a] (vl: a @ sender) (receiver:String) (_dont_send_to_yourself: sender != receiver := by decide):= toChoreo (ChorEff.Send_recv vl receiver)
+def send_recv {a:Type} [Serialize a] (vl: a @ sender) (receiver:String) := toChoreo (ChorEff.Send_recv vl receiver)
 def locally (loc: String) (comp: (Unwrap loc) -> IO b) := toChoreo (ChorEff.Local loc comp)
 def compute (loc: String) (comp: (Unwrap loc) -> b) := toChoreo (ChorEff.Calc loc comp)
 def branch {a:Type} [Serialize a] (lv: a @ decider) (cont: a -> Choreo b):= toChoreo (ChorEff.Cond lv cont)

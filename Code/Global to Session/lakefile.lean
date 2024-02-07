@@ -12,8 +12,8 @@ require socket from git
   "https://github.com/hargoniX/socket.lean/" @ "main"
 --  "https://github.com/xubaiw/lean4-socket.git"
 
-require mathlib from git
-  "https://github.com/leanprover-community/mathlib4.git"
+-- require mathlib from git
+--   "https://github.com/leanprover-community/mathlib4.git"
 
 @[default_target]
 lean_exe «test» where
@@ -67,6 +67,11 @@ lean_exe bookseller2 where
 
 lean_exe auth where
   root := `chorlean.examples.sso_auth
+  moreLeancArgs := #["-fPIC"]
+  supportInterpreter := true
+
+lean_exe merge where
+  root := `chorlean.examples.mergesort
   moreLeancArgs := #["-fPIC"]
   supportInterpreter := true
 

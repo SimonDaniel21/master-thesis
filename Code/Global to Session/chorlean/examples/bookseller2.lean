@@ -1,6 +1,6 @@
 import chorlean.Choreo
 
-def bookseller_cfg := local_cfg ["buyer", "seller", "friend"] 3333
+def bookseller_cfg := gen_fullmesh_cfg ["buyer", "seller", "friend"]
 
 
 -- budget -> price -> decision

@@ -59,3 +59,19 @@ def main (args : List String) : IO Unit := do
   else
     IO.println "Unknown mode"
     return ()
+
+
+
+def Box (l: String) (x: Type) := Nat
+
+class Key (l: String) where
+  unwrap :  Box l x → x
+
+def Box.unwrap [h: Key l]: Box l x → x := h.unwrap
+
+def Store := List ((t: Type) × Nat × t)
+--def Store.unwrap : Key l → Box l x → x
+instance Key Store where unwrap := Store.unwrap
+
+def fooCode [Key l] (x: Box l Nat) (y: Box r Nat): Nat :=
+  x.unwrap + 1

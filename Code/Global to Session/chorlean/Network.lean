@@ -5,6 +5,9 @@ abbrev Channel := (String × String) × Socket
 
 abbrev Net:= List (Channel)
 
+abbrev sym := true
+abbrev uni := false
+
 def HasChannel (s r: String) (net:Net) : Bool :=
   let c_opt := net.lookup (s, r)
   match c_opt with
@@ -12,24 +15,24 @@ def HasChannel (s r: String) (net:Net) : Bool :=
   | none => false
 
 
-def local_cfg_for: String -> List String -> UInt16 -> Cfg
+def gen_fullmesh_cfg_for: String -> List String -> (port:UInt16:=3333) -> Cfg
 | _, [], _ => []
 | loc, l::ls, p =>
   if (l == loc) then
-    local_cfg_for loc ls p
+    gen_fullmesh_cfg_for loc ls p
   else
-    [((loc, l), .v4 ((.mk 127 0 0 1)) p)] ++ local_cfg_for loc ls (p+1)
+    [((loc, l), .v4 ((.mk 127 0 0 1)) p)] ++ gen_fullmesh_cfg_for loc ls (p+1)
 
 
 -- creates a fully meshed net configuration
-def local_cfg: (locs: List String) -> UInt16 -> (missing: List String := locs) -> Cfg
+def gen_fullmesh_cfg: (locs: List String) -> (port:UInt16:=3333) -> (missing: List String := locs) -> Cfg
 | _, _, [] => []
-| all, p, l::ls => local_cfg_for l all p ++ local_cfg all (p + UInt16.ofNat (all.length - 1)) ls
+| all, p, l::ls => gen_fullmesh_cfg_for l all p ++ gen_fullmesh_cfg all (p + UInt16.ofNat (all.length - 1)) ls
 
 
 -- creates a net cfg from pairs of (Location) Strings, and an additional bool that,
 -- if set two true will create a channel in the opposing direction aswell
-def gen_cfg: (locs: List ((String × String) × Bool)) -> UInt16 -> Cfg
+def gen_cfg: (locs: List ((String × String) × Bool)) -> (port:UInt16:=3333) -> Cfg
 | [], p => []
 | ((s, r), bidirectional)::ls, p =>
   let cs := [((s, r), .v4 ((.mk 127 0 0 1)) p)]
@@ -170,7 +173,7 @@ def Net_Eve: Network Unit := do
   send "bob" (s ++ "-eve")
 
 
-def test_cfg := local_cfg ["alice", "bob", "eve"] 6665
+def test_cfg := gen_fullmesh_cfg ["alice", "bob", "eve"] 6665
 
 #eval test_cfg
 --2-2

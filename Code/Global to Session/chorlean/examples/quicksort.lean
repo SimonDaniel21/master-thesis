@@ -6,6 +6,8 @@ inductive LocVal (α: Type) (loc: String) where
 | Empty: LocVal α loc
 
 
+
+
 infixl:55 "@" => LocVal
 
 instance [Serialize a]: ToString (a @ l) where
@@ -14,35 +16,44 @@ instance [Serialize a]: ToString (a @ l) where
     | .Empty => "Empty"
 
 
+
 def notEmpty: LocVal a l -> Bool
 | LocVal.Wrap _ =>  true
 | LocVal.Empty => false
 
-example : x < x + 1 := exact?%
-example : Nat := by exact?
 
-abbrev ValidLocVal (α: Type) (loc: String) := {lv:(α @ loc) // notEmpty lv}
+def notEmpty_at (lv: LocVal _a l1) (l2: String): Prop :=
+  (l1 == l2) → notEmpty lv
 
-def wrap {a} (v:a) (l: String): ValidLocVal a l:=
-  let lv := LocVal.Wrap v
-  --let p: notEmpty lv := by decide
-  ⟨LocVal.Wrap v , by exact sorry⟩
+def wrap {a} (v:a) (l: String): a @ l:=
+  LocVal.Wrap v
+
+def unwrap (lv: a @ l) (_ex: notEmpty lv :=sorry):  a := match lv with
+| LocVal.Wrap v =>  v
+
+
+inductive ValidLocVal (α: Type) (loc: String) where
+| val: α -> ValidLocVal α loc
+
+def exist_at (loc:String) :=  ∀ a:Type,  ∀  (vl: a @ loc), notEmpty vl
+
+def Valid.wrap (v:a) : ValidLocVal a l :=
+  ValidLocVal.val v
+
+#check Valid.wrap 4
+
+
+def Unwrap (l:String)  :=   {a:Type} -> a @ l -> ValidLocVal a l
 
 --def ttt: ValidLocVal Nat "alice" := wrap 33 "alice"
 
-def unwrap (lv: ValidLocVal a l):  a :=
-  let ⟨lv,_⟩  := lv
-  match lv with
-| LocVal.Wrap v  =>  v
+def Valid.unwrap : ValidLocVal a _l -> a
+| .val v  =>  v
 
-def test := unwrap (⟨ LocVal.Wrap "hello" (loc:="alice"), by decide⟩ )
-#eval test
-
-def Unwrap (l:String) := {a:Type} -> (lv: a @ l) -> (ex: notEmpty lv := by decide) -> a
 
 def testa := Unwrap "inge"
 def inge := "inge"
-def testu: Unwrap inge := fun x p => unwrap x (l:="inge") p
+--def testu: Unwrap inge := fun x p => unwrap x (l:="inge") p
 def testw1 := wrap 23 "inge"
 def testw2 (s:String) := wrap 23 s
 
@@ -111,21 +122,24 @@ def branch {a:Type} [Serialize a] (lv: a @ decider) (p:notEmpty lv := by decide)
 
 
 mutual
-  def ChorEff.epp: ChorEff a -> String -> Network a
+  def ChorEff.epp: ChorEff a -> (loc:String)  -> Network a
   | ChorEff.Send_recv (a:=a) lv receiver  (sender:=sender), l => do
     if k:(l == sender && l == receiver) then
-      return  wrap (unwrap lv) receiver
+      return  wrap (Valid.unwrap lv) receiver
     if k:(sender == l) then
+
       send receiver (unwrap lv)
       return .Empty
     else if k:(receiver == l) then
       let response <- (recv sender)
       return wrap response receiver
     else
+      let temp := (Valid.unwrap lv)
       return .Empty
   | ChorEff.Local l1 comp, l2 => do
     if j:( l1 == l2) then
-      let un:= fun x p => unwrap x p
+      let proof_existance: exist_at l2 := sorry
+      let un: Unwrap l1:= fun x => by sorry
       let res <- run (comp (un))
       let wrapped := wrap res l1
       return wrapped
@@ -170,7 +184,7 @@ def silent_post: Choreo (String @"alice"):= do
   let localEffect := ChorEff.Local "steve" fun x => return ()
   let localChoreo := toChoreo localEffect
 
-  let wrapped := wrap 3 "bob"
+  --let wrapped: ValidLocVal Nat  := wrap 3 "bob"
   --let unwrapped := unwrap wrapped
 
 
@@ -188,7 +202,7 @@ def silent_post: Choreo (String @"alice"):= do
 
 
 
-  let msg <- locally "alice" fun un => return (un input2) ++ "-alice_mut" ++ toString (un input)
+  let msg <- locally "alice" fun un => return (unwrap ⟨input2, un input2⟩) ++ "-alice_mut" ++ toString (un input)
 
   let msg2 <- locally "alice" fun un => return (un msg)
 
