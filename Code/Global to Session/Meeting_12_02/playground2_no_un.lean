@@ -7,15 +7,11 @@ inductive GVal (a:Type) (owner endpoint: String)  where
 | Wrap:  (owner = endpoint) -> a -> GVal a owner endpoint
 | Empty: (owner ≠ endpoint) -> GVal a owner endpoint
 
-def GVal.wrap {a:Type} (owner endpoint: String) (v:a): GVal a owner endpoint:=
-  if h:(owner = endpoint) then
-    GVal.Wrap h v
-  else
-    GVal.Empty h
-
 def GVal.unwrap {a:Type} {owner endpoint: String}: (g: GVal a owner endpoint) -> (h: owner = endpoint) -> a
 | Wrap _ v  => fun _ => v
 | Empty q => fun x => by contradiction
+
+
 
 infixl:55 "@" => fun {endpoint:String} (a:Type) (loc:String) => GVal a loc endpoint
 
@@ -23,8 +19,8 @@ def Unwrap (owner endpoint: String) :=  {a:Type} -> GVal a owner endpoint -> a
 
 inductive ChorEff {endpoint:String}: Type -> Type 1 where
 | Send_recv [Serialize a]: {sender:String} -> GVal a sender endpoint  -> (receiver:String) -> ChorEff (GVal a receiver endpoint)
-| Local : (loc:String) -> ([∀ x, Coe (GVal x loc endpoint) x] -> IO a) -> ChorEff (GVal a loc endpoint)
-| Calc : (loc:String) -> ([∀ x, Coe (GVal x loc endpoint) x] -> a) -> ChorEff (GVal a loc endpoint)
+| Local : (loc:String) -> ((loc = endpoint) -> IO a) -> ChorEff (GVal a loc endpoint)
+| Calc : (loc:String) -> ((loc = endpoint) -> a) -> ChorEff (GVal a loc endpoint)
 
 inductive Choreo (endpoint:String): Type -> Type 1  where
 | Cond [Serialize a]: GVal a decider endpoint -> (a -> Choreo endpoint b) -> Choreo endpoint b
@@ -37,6 +33,12 @@ def Choreo.bind (ep:String) {α β: Type}:  Choreo ep α → (α → Choreo ep �
   Choreo.Cond lv (fun x => bind ep (next x) next')
 | Choreo.Return v, next' => next' v
 
+
+def allways_some_fun (some_proof: ∀ (a:Type) (o: Option a), o.isSome): Unit :=
+  let o1: Option Nat := .some 3
+  let some_calc: Nat := (o1.get (by simp [some_proof])) + 3
+  ()
+
 instance (ep: String): Monad (Choreo ep) where
   pure x := Choreo.Return x
   bind  := Choreo.bind ep
@@ -46,17 +48,17 @@ def toChoreo (endpoint:String) (eff: ChorEff a (endpoint:=endpoint)) : Choreo en
 
 --def send_recv {a:Type} [Serialize a] (vl: a @ sender) (receiver:String) (_dont_send_to_yourself: sender != receiver := by decide):= toChoreo (ChorEff.Send_recv vl receiver)
 def send_recv {a:Type} {endpoint sender: String} [Serialize a] (gv: GVal a sender endpoint) (receiver: String) := toChoreo endpoint (ChorEff.Send_recv gv receiver )
-def locally {endpoint: String} (loc: String) (comp: [∀ x, Coe (GVal x loc endpoint) x] -> IO b) := toChoreo endpoint (ChorEff.Local loc comp)
-def compute (loc: String) (comp: [∀ x, Coe (GVal x loc endpoint) x] -> b) := toChoreo endpoint (ChorEff.Calc loc comp)
+def locally {endpoint: String} (loc: String) (comp: (loc = endpoint) -> IO b) := toChoreo endpoint (ChorEff.Local loc comp)
+def compute (loc: String) (comp: (loc = endpoint) -> b) := toChoreo endpoint (ChorEff.Calc loc comp)
 def branch {endpoint: String}  {a:Type} [Serialize a] (gv: GVal a decider endpoint) (cont: a -> Choreo endpoint b):= Choreo.Cond gv cont
-def branch' {endpoint: String}  {a:Type} [Serialize b] (comp: [∀ x, Coe (GVal x decider endpoint) x] -> IO b) (cont: b -> Choreo endpoint a):=
-  do
-  let gv <- locally decider comp
-  Choreo.Cond gv cont
-def send_recv_comp {a:Type} (endpoint: String) [Serialize b] (sender receiver: String) (comp: [∀ x, Coe (GVal x sender endpoint) x] -> IO b)  :=
-  do
-  let gv <- locally sender comp
-  toChoreo endpoint (ChorEff.Send_recv gv receiver)
+
+-- def send_recv_locally {a:Type} [Serialize a] (sender receiver:String) (comp: (Unwrap sender) -> IO a) (_dont_send_to_yourself: sender != receiver := by decide):= do
+--   let lv <- toChoreo (ChorEff.Local sender comp)
+--   toChoreo (ChorEff.Send_recv lv receiver)
+
+-- def send_recv_pure {a:Type} [Serialize a] (sender receiver:String) (comp: (Unwrap sender) -> a) (_dont_send_to_yourself: sender != receiver := by decide):= do
+--   let r := wrap (comp unwrap) sender
+--   toChoreo (ChorEff.Send_recv r receiver)
 
 def ChorEff.epp {ep:String}: ChorEff a (endpoint := ep)
    -> Network a
@@ -76,17 +78,14 @@ def ChorEff.epp {ep:String}: ChorEff a (endpoint := ep)
 
 | ChorEff.Local loc comp => do
     if h:( loc = ep) then
-
-      have (x:Type) : Coe (GVal x loc ep) x := ⟨fun gv => gv.unwrap h⟩
-      let res <- run comp
+      let res <- run (comp h)
       return GVal.Wrap h res
     else
       return  GVal.Empty h
 
 | ChorEff.Calc loc comp => do
     if h:( loc = ep) then
-      have (x:Type) : Coe (GVal x loc ep) x := ⟨fun gv => gv.unwrap h⟩
-      return GVal.Wrap h (comp)
+      return GVal.Wrap h (comp h)
     else
       return  GVal.Empty h
 
@@ -111,35 +110,35 @@ abbrev Choreo2 {a:Type}:= String -> Network a -> Type
 
 notation:55 lv "~>" receiver => send_recv lv receiver
 
-notation:55 sender "~>" receiver "#" comp => send_recv_comp sender receiver comp
+--notation:55 sender "~>" receiver "##" comp => send_recv_locally sender receiver comp
 --notation:55 sender "~>" receiver "pure" comp => send_recv_pure sender receiver comp
 
+def silent_post (ep:String): Choreo ep (GVal (List String) "alice" ep):= do
 
-def cast_gv (gv: GVal a owner ep) [k:∀ x, Coe (GVal x owner ep) x]: a :=
-  let c := k a
-  c.coe gv
+  let input: String @ "alice" <- locally "alice" (fun _ => do
+    IO.println "enter a message"
+    return <- IO.getLine
+  )
 
--- works similiar to normal coersion arrow ↑ but always casts to the underlying type
-notation:55 "⤉" gv => cast_gv gv
+  let msg <- input ~> "eve"
+  let msg <- locally "eve" fun h => return [(msg.unwrap h), "eve"]
 
--- def silent_post (ep:String): Choreo ep (GVal (List String) "alice" ep):= do
+  let msg <- send_recv msg "bob"
 
---   let input: String @ "alice" <- locally "alice" do
---     IO.println "enter a message"
---     return <- IO.getLine
+  let msg <- locally "bob" fun h => return (msg.unwrap h).concat "bob"
+
+  let msg <- send_recv msg "alice"
+  let _a: Unit @ "alice" <- locally "alice" (fun h => do
+    IO.println s!"alice ended with {msg.unwrap h}"
+  )
+  return msg
 
 
---   let msg <- input ~> "eve"
---   let msg <- locally "eve" do
---     return [↑msg, "eve"]
-
---   let msg <- send_recv msg "bob"
-
---   let msg <- locally "bob" do
---     return (⤉msg).concat "bob"
-
---   let msg <- send_recv msg "alice"
---   let _a: Unit @ "alice" <- locally "alice" do
---     IO.println s!"alice ended with {⤉msg}"
-
---   return msg
+def main (args : List String): IO Unit := do
+  let mode := args.get! 0
+  let net <- init_network test_cfg mode
+  let temp := silent_post mode
+  --let endpoint_program: Choreo (GVal (List String) "alice") := temp.epp
+  let res <- ((silent_post mode).epp).run mode net
+  --IO.println (s!"res: {res}")
+  return ()

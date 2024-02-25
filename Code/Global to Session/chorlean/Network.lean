@@ -1,6 +1,9 @@
 import Test.my_utils
 
-abbrev Cfg := List ((String × String) × (address))
+
+def dbg_prints := true
+
+abbrev Cfg := List ((String × String) × (Address))
 abbrev Channel := (String × String) × Socket
 
 abbrev Net:= List (Channel)
@@ -79,7 +82,6 @@ instance (loc:String): ToString (NetEff a)  where
 -- function that takes a Value, Net and LocString and returns a program that sends the value to
 -- all channels that the LocString can send to in the Net
 
-def dbg_prints := true
 
 def NetEff.run : NetEff a -> String -> Net -> IO a
 | NetEff.Run comp (a:=a), _loc, _net => do
@@ -92,7 +94,7 @@ def NetEff.run : NetEff a -> String -> Net -> IO a
   let sock_opt := c.lookup (sender, receiver)
   match sock_opt with
   | some sock =>
-    sock.send_val v
+    sock.send_val2 v
   | none =>
     throw (IO.Error.userError s!"cannot find addr {sender} x {receiver} in cfg for send")
 | NetEff.Recv (a:=_t) sender, receiver, c => do
@@ -101,7 +103,7 @@ def NetEff.run : NetEff a -> String -> Net -> IO a
   let sock_opt := c.lookup (sender, receiver)
   match sock_opt with
   | some sock =>
-    sock.recv_val
+    sock.recv_val2
   | none =>
     throw (IO.Error.userError s!"cannot find location {sender} x {receiver} in cfg for receive")
 | NetEff.Broadcast v, loc, ((sender, _receiver), sock)::cs => do
@@ -109,12 +111,12 @@ def NetEff.run : NetEff a -> String -> Net -> IO a
   if (loc == sender) then
     if dbg_prints then
       IO.println s!"{sender} -> {_receiver} ({Serialize.pretty v})"
-    sock.send_val v
+    sock.send_val2 v
   (NetEff.Broadcast v).run loc cs
 | NetEff.Broadcast _, loc, [] => return ()
 | NetEff.Broadcast_except es v, loc, ((sender, _), sock)::cs => do
   if (loc == sender && ! (es.contains sender)) then
-    sock.send_val v
+    sock.send_val2 v
   else
     (NetEff.Broadcast v).run loc cs
 | NetEff.Broadcast_except _ _, loc, [] => return ()
@@ -182,7 +184,7 @@ def test_cfg := gen_fullmesh_cfg ["alice", "bob", "eve"] 6665
 --5-20
 
 -- epp for initializing one network socket
-def init_channel (loc sender receiver: String) (addr: address):  IO (Option Channel) := do
+def init_channel (loc sender receiver: String) (addr: Address):  IO (Option Channel) := do
   if sender == receiver then
     throw (IO.Error.userError "cannot init a channel where sender == receiver")
   else if (loc == sender) then

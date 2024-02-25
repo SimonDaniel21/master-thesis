@@ -135,26 +135,21 @@ def List.to_bytes [Serialize a]: to_bytes_t (List a)
   let res_byte_array := JoinByteArrayList data
   list_size.to_bytes ++ res_byte_array
 
-def List.from_bytes_rec [Serialize a]: UInt16 -> from_bytes_t (List a)
+def List.from_bytes_rec [Serialize a]: Nat -> from_bytes_t (List a)
 | 0, bs => .ok []
-| x, bs => do
-  let len <- UInt16.from_bytes (ByteArray.mk (bs.data.toSubarray 0 2).toArray)
-  dbg_trace s!"len: {len}"
+| x+1, bs => do
+  let len <- UInt16.from_bytes (bs.extract 0 2)
+  --dbg_trace s!"len: {len}"
 
-  let data <- Serialize.from_bytes (a:=a) (ByteArray.mk (bs.data.toSubarray 2 (2+(len.toNat))).toArray)
-  let rest <- List.from_bytes_rec (x-1) (ByteArray.mk (bs.data.toSubarray (2+(len.toNat)) bs.data.size).toArray)
+  let data <- Serialize.from_bytes (a:=a) (bs.extract 2 (2+(len.toNat)))
+  let rest <- List.from_bytes_rec (x) (bs.extract (2+(len.toNat)) bs.data.size)
   return [data] ++ rest
-decreasing_by sorry
-
-
-
-
 
 def List.from_bytes [Serialize a]: from_bytes_t (List a) := fun bs => do
-  let list_size_bytes := bs.data.toSubarray 0 2
-  let list_data_bytes := ByteArray.mk (bs.data.toSubarray 2).toArray
-  let list_size <- (UInt16.from_bytes (ByteArray.mk list_size_bytes.toArray))
-  List.from_bytes_rec list_size list_data_bytes
+  let list_size_bytes := bs.extract 0 2
+  let list_data_bytes := bs.extract 2 bs.size
+  let list_size <- (UInt16.from_bytes (list_size_bytes))
+  List.from_bytes_rec list_size.toNat list_data_bytes
 
 
 instance: Serialize Nat where
@@ -179,29 +174,39 @@ instance (a:Type) [Serialize a]: Serialize (List a) where
 
 def test_bytes1 := UInt16.to_bytes 4444
 
-def test_bytes := ["hello", "world","shrt", "longer text"].to_bytes
+def empty_nats: List Nat:= []
 
-def test_bytes2:= [3, 4,5,6,3253523,55,555,66].to_bytes
+def test_bytes := ["hellö", "world","shrt", "longer text"].to_bytes
+
+def test_bytes2:= empty_nats.to_bytes
 
 
-#eval List.from_bytes test_bytes (a:=String)
-#eval List.from_bytes test_bytes2 (a:=Nat)
+--#eval List.from_bytes test_bytes (a:=String)
+--#eval List.from_bytes test_bytes2 (a:=Nat)
 
 def tn: Nat :=3
 #eval (Serialize.pretty " 2")
 
 
-abbrev address := Socket.SockAddr4
+abbrev Address := Socket.SockAddr4
 
-instance: ToString address where
+instance: ToString Address where
   toString x := s!"{x.addr}@{x.port}"
 
 
 def Socket.send_val (sock: Socket) (msg: t) [Serialize t]: IO Unit := do
   let bytes := Serialize.to_bytes msg
   let sz ← sock.send bytes
+  IO.println s!"send bytes: {bytes}"
   assert! sz == bytes.size.toUSize
 
+def Socket.send_val2 (sock: Socket) (msg: t) [Serialize t]: IO Unit := do
+  let payload := Serialize.to_bytes msg
+  let size_info: ByteArray := payload.size.toUInt16.to_bytes
+  let bytes := size_info ++ payload
+  let sz ← sock.send bytes
+  IO.println s!"send bytes: {bytes}"
+  assert! sz == bytes.size.toUSize
 
 
 -- def broadcast (msg: t) [Serialize t]: List address -> IO Unit
@@ -213,7 +218,7 @@ def Socket.send_val (sock: Socket) (msg: t) [Serialize t]: IO Unit := do
 
 
 
-def Socket.SockAddr4.connect_to (addr: address): IO Socket := do
+def Socket.SockAddr4.connect_to (addr: Address): IO Socket := do
   let sock ← Socket.mk .inet .stream
   repeat
     try
@@ -223,7 +228,7 @@ def Socket.SockAddr4.connect_to (addr: address): IO Socket := do
       IO.sleep send_timeout_duration
   return sock
 
-def Socket.SockAddr4.listen_on (addr: address): IO Socket := do
+def Socket.SockAddr4.listen_on (addr: Address): IO Socket := do
   let sock ← Socket.mk .inet .stream
   sock.bind addr
   sock.listen 1
@@ -233,6 +238,7 @@ def Socket.SockAddr4.listen_on (addr: address): IO Socket := do
 
 def Socket.recv_val (sock: Socket) (max: USize := 4096) [Serialize t]: IO t := do
   let recv ← sock.recv max
+  IO.println s!"recv bytes: {recv}"
   if recv.size == 0 then throw (IO.Error.otherError 2 "received msg with 0 bytes")
 
   let msg := Serialize.from_bytes recv
@@ -242,10 +248,27 @@ def Socket.recv_val (sock: Socket) (max: USize := 4096) [Serialize t]: IO t := d
     return val
   | .error e => throw (IO.Error.userError e)
 
+def Socket.recv_val2 (sock: Socket) (max: USize := 4096) [Serialize t]: IO t := do
+  let size_info_opt := UInt16.from_bytes (<- sock.recv 2)
+  match size_info_opt with
+  | .ok size_info =>
+    let payload <- sock.recv (USize.ofNat size_info.toNat)
+    IO.println s!"recv bytes: {payload}"
+    if payload.size != size_info.toNat then throw (IO.Error.otherError 2 s!"payload size [{size_info}] does not match up with received [{payload.size}]")
+
+    let msg := Serialize.from_bytes payload
+    match msg with
+    | .ok val =>
+      --IO.println s!"recv: {msg}"
+      return val
+    | .error e => throw (IO.Error.userError e)
+  | .error e => throw (IO.Error.userError e)
+
+
+
 def IO.getLine: IO String := do
   let stdin <- IO.getStdin
-  let str := (<-stdin.getLine).dropRight 1
-  return str
+  return (<-stdin.getLine).dropRight 1
 
 def IO.getBool: IO Bool := do
   let str <- IO.getLine
@@ -255,7 +278,7 @@ def IO.getNat: IO Nat := do
   let str <- IO.getLine
   return str.toNat!
 
-def List.split (l: List a) (n: Nat):  (List a × List a) :=
+def List.seperate (l: List a) (n: Nat):  (List a × List a) :=
  let l1 := l.drop n
  let l2 := (l.reverse.drop (l.length - n)).reverse
  (l2, l1)

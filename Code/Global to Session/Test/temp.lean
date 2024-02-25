@@ -1,132 +1,157 @@
-import «Test».type
-import Test.global_view
-import Test.local_view
+import Test.my_utils
+import chorlean.Network
+--import Mathlib
 
-inductive DSL
-| PLUS:DSL->DSL->DSL
-| CONSTANT:Nat->DSL
-| SERVER_VAR
-
-
-open Ty
-
-#check (List.Mem.head _ : (1 ∈ [1,2,3]))
-#check (List.Mem.tail _ (List.Mem.head _ ): (2 ∈ [1,2,3]))
-
--- def addstring: String-> String->String := String.append
--- instance aneinander: Add String where
---   add := addstring
+inductive LocVal (α: Type) (loc: String) where
+| Wrap: α -> LocVal α loc
+| Empty: LocVal α loc
 
 
-inductive EXPRESSION where
-  | CONSTANT : EXPRESSION
-  | PLUS (e1: EXPRESSION) (e2: EXPRESSION):  EXPRESSION
+infixl:55 "@" => LocVal
+
+instance [Serialize a]: ToString (a @ l) where
+  toString := fun x => match x with
+    | .Wrap v => toString v ++ "@" ++ toString l
+    | .Empty => "Empty"
+
+def wrap {a} (v:a) (l: String): a @ l:=
+  LocVal.Wrap v
+
+def exists_locally: LocVal a l -> Bool
+| LocVal.Wrap _ =>  true
+| LocVal.Empty => false
+
+def unwrap (lv: a @ l) (_ex: exists_locally lv :=sorry):  a := match lv with
+| LocVal.Wrap v =>  v
 
 
-inductive TYPED_EXPRESSION: (List String) -> EXPRESSION -> Ty -> Type
-  | TYPED_CONSTANT :  TYPED_EXPRESSION GAMMA EXPRESSION.CONSTANT nat
-  | TYPED_PLUS (typed_e1: TYPED_EXPRESSION GAMMA e1 nat)
-               (typed_e2: TYPED_EXPRESSION GAMMA e2 nat):
-                TYPED_EXPRESSION GAMMA (EXPRESSION.PLUS e1 e2) nat
+def Unwrap (l:String)  :=   {a:Type} -> a @ l -> a
+
+def local_func (a:Type) (l:String):= (Unwrap l -> a)
+def local_prog (a:Type) (l:String):= (Unwrap l -> IO a)
+
+abbrev ChannelC := (String × String)
+
+inductive Choreo: List ChannelC -> Type -> Type 1 where
+| Send_recv (c: ChannelC) : (p: cs.contains c := by decide) -> Choreo cs n
+| Create (c:ChannelC) : Choreo (cs.concat c) n -> (p: !(cs.contains c) := by decide) -> Choreo cs n
+| Return: a -> Choreo cs a
+
+inductive Induct : List String → Type where
+| Use : (s : String) -> (p : ls.contains s:= by decide) ->  Induct ls
+| Add : (s : String) -> Induct (ls.concat s) -> (p : !(ls.contains s):= by decide) -> Induct ls
+| Rmv : (s : String) -> Induct (ls.erase s) -> (p : (ls.contains s):= by decide) -> Induct ls
+
+def t11 := Induct.Add (ls := []) "hello" (Induct.Use "hello") -- does not fill in (by decide) automatically
+def t21 := Induct.Add (ls := []) "hello" (Induct.Use "hello") -- works
 
 
+def t23 := Induct.Add (ls := []) "hello" (Induct.Rmv "hello" (Induct.Add "hello" (Induct.Use "hello"))) -- works
 
+def test : "a" == "b" := by rfl
 
-
-
-
-inductive TYPED_GLOBAL_PROGRAM (GAMMA: List variableType) (DELTA: List channelVarType) : GLOBAL_PROGRAM -> Type
-  | SEND_RECV (channel_name: channelVarType) (var_name: variableType) (P:GLOBAL_PROGRAM):
-    channel_name ∈ DELTA -> var_name ∈ GAMMA -> TYPED_GLOBAL_PROGRAM GAMMA DELTA (GLOBAL_PROGRAM.SEND_RECV channel_name var_name P)
-
-inductive Term' : Ty -> Type
-  | var (t: Ty) : Nat -> Term' t
-  | const (n: Nat): Term' nat
-
-
-
-
-mutual
-  inductive TYPE where
-    | _string    : TYPE
-    | _real    : TYPE
-    | branch : String->GLOBAL_TYPE->String->GLOBAL_TYPE->TYPE
-
-  inductive GLOBAL_TYPE
-  | SEND_RECEIVE: AGENT->AGENT->TYPE->GLOBAL_TYPE->GLOBAL_TYPE
-  | END: GLOBAL_TYPE
-
-end
-
-def main : IO Unit :=
-  IO.println s!"Hello, {hello}!"
-
-
-def agent_to_string (a: AGENT) : String := match a with
-  | AGENT.client => "client"
-  | AGENT.server => "server"
-
-mutual
-  def type_to_string :TYPE -> String
-    | TYPE._string => "string"
-    | TYPE._real => "real"
-    | TYPE.branch s1 g1 s2 g2 => (String.replace ("{\n" ++ s1 ++ ": " ++ to_global_string g1 ++ "\n" ++ s2 ++ ": " ++ to_global_string g2) "\n" "\n  ") ++ "\n}"
-
-  def to_global_string (g: GLOBAL_TYPE) : String := match g with
-  | GLOBAL_TYPE.SEND_RECEIVE a b t g => (String.append (String.append (String.append (String.append (agent_to_string a) " -> ") (agent_to_string b)) ": ") (type_to_string t)) ++ to_global_string g
-  | GLOBAL_TYPE.END => ""
-end
-
-instance debug_string: ToString GLOBAL_TYPE where
-  toString := to_global_string
-
-instance debug_type_string: ToString TYPE where
-  toString := type_to_string
-
--- instance: Lean.Eval GLOBAL_TYPE where
---   eval g b := IO.println (g ())
-
-
-#eval GLOBAL_TYPE.SEND_RECEIVE AGENT.client AGENT.server TYPE._string (GLOBAL_TYPE.SEND_RECEIVE AGENT.client AGENT.client TYPE._real GLOBAL_TYPE.END)
-
-#eval  GLOBAL_TYPE.SEND_RECEIVE AGENT.client AGENT.server
-(TYPE.branch "success" (GLOBAL_TYPE.SEND_RECEIVE AGENT.client AGENT.server TYPE._string GLOBAL_TYPE.END)
- "failure" (GLOBAL_TYPE.SEND_RECEIVE AGENT.client AGENT.server TYPE._string GLOBAL_TYPE.END)) GLOBAL_TYPE.END
-
-#eval TYPE.branch "success" (GLOBAL_TYPE.SEND_RECEIVE AGENT.client AGENT.server TYPE._string GLOBAL_TYPE.END) "failure" (GLOBAL_TYPE.SEND AGENT.client AGENT.server TYPE._string GLOBAL_TYPE.END)
-def inc: Nat -> Nat
-| a => a+1
-
-#reduce List.map inc [1,2,3]
-
-def joinStringsWith (s1: String) (s2: String) (s3: String) : String :=
-  String.append (String.append s2 s1) s3
+def test2 : "a" == "b" :=
+  try
+  by decide
 
 
 
-#reduce eval (DSL.CONSTANT 2)
-def temp: Int := 4
-#eval if (3+2 < 10) then temp else 5
-#check (if 3 == 4 then "equal" else "not equal")
-#check IO.println (joinStringsWith ", " "one\n" "and another")
+#check decide
 
-#check (joinStringsWith)
+def c1 :=
 
-open Ty (nat fn)
+  Choreo.Create ("alice", "bob") (cs := []) (n:=Nat)
+     (Choreo.Create ("alice", "bob")
+        (Choreo.Send_recv ("alice", "bob")) )
 
-def Term (ty: Ty) := (rep: Ty -> Type) -> Term' rep ty
 
-def pretty (e : Term' (fun _ => String) ty) (i : Nat := 1) : String :=
-  match e with
-  | .var s     => s
-  | .const n   => toString n
-  | .app f a   => s!"({pretty f i} {pretty a i})"
-  | .plus a b  => s!"({pretty a i} + {pretty b i})"
-  | .lam f     =>
-    let x := s!"x_{i}"
-    s!"(fun {x} => {pretty (f x) (i+1)})"
-  | .let a b  =>
-    let x := s!"x_{i}"
-    s!"(let {x} := {pretty a i}; => {pretty (b x) (i+1)}"
+def c2 := c1 (Choreo.Create ("alice", "bob") (n:=Nat))
 
-#eval
+def Choreo.bind {α: (List ChannelC) -> Type}: Choreo (α) → (α → Choreo β) → Choreo β
+| Choreo.Send_recv lv next , next' => Choreo.Send_recv lv (fun x => bind (next x) next')
+| Choreo.create c next, next' => Choreo.create c (bind (next) next')
+| Choreo.Return v, next' => next' v
+
+instance: Monad Choreo where
+  pure x := Choreo.Return x
+  bind  := Choreo.bind
+
+abbrev CChoreo := StateT (List ChannelC) Choreo
+
+--def send_recv {a:Type} [Serialize a] (vl: a @ sender) (receiver:String) (_dont_send_to_yourself: sender != receiver := by decide):= toChoreo (ChorEff.Send_recv vl receiver)
+def send_recv {a:Type} {sender:String} [Serialize a] (vl: a @ sender) (receiver:String) := Choreo'.Send_recv vl receiver (fun x => Choreo'.Return x)
+-- def locally (loc: String) (comp: (Unwrap loc) -> IO b) := Choreo'.Local loc comp (fun x => Choreo'.Return x)
+-- def compute (loc: String) (comp: (Unwrap loc) -> b) := Choreo'.Calc loc comp (fun x => Choreo'.Return x)
+-- def branch {a:Type} {decider:String} [Serialize a] (lv: a @ decider) (cont: a -> Choreo' b) :=
+--   let temp:= (fun x => Choreo'.Return x (a:=b))
+--   Choreo'.Cond (a:=a) (b:=b) lv cont temp
+
+def open_channel (c: ChannelC): CChoreo Unit := do
+  let s <- get
+  set (s.concat c)
+  return ()
+
+def close_channel (c: ChannelC): CChoreo Unit := do
+  let s <- get
+  set (s.erase c)
+  return ()
+-- def send_recv_locally {a:Type} [Serialize a] (sender receiver:String) (comp: (Unwrap sender) -> IO a) (_dont_send_to_yourself: sender != receiver := by decide):= do
+--   let lv <- toChoreo (ChorEff.Local sender comp)
+--   toChoreo (ChorEff.Send_recv lv receiver)
+
+-- def send_recv_pure {a:Type} [Serialize a] (sender receiver:String) (comp: (Unwrap sender) -> a) (_dont_send_to_yourself: sender != receiver := by decide):= do
+--   let r := wrap (comp unwrap) sender
+--   toChoreo (ChorEff.Send_recv r receiver)
+
+def Choreo'.epp: Choreo' a -> String -> Network a
+| Choreo'.Send_recv lv receiver (sender:=sender) next, l => do
+  if (sender == receiver) then
+    let temp := wrap (unwrap lv) receiver
+    (next temp).epp l
+
+  else if (sender == l) then
+    send receiver (unwrap lv)
+    (next .Empty).epp l
+  else if (receiver == l) then
+    let response <- (recv sender)
+    let temp := wrap response receiver
+    (next temp).epp l
+  else
+    (next .Empty).epp l
+| Choreo'.Local l1 comp next, l2 => do
+  if j:( l1 == l2) then
+    let res <- run (comp (unwrap))
+    let temp := wrap res l1
+    (next temp).epp l2
+  else
+    (next .Empty).epp l2
+| Choreo'.Calc l1 comp next, l2 => do
+  if j:( l1 == l2) then
+    let temp :=  wrap (comp (unwrap)) l1
+    (next temp).epp l2
+  else
+    (next .Empty).epp l2
+| Choreo'.Cond lv fn next (decider:=decider), loc => do
+  if (loc == decider) then
+    let choice := (unwrap lv)
+    broadcast choice
+    let temp <- (fn choice).epp loc
+    (next temp).epp loc
+  else
+    let choice <- (recv decider)
+    --(fn choice).epp loc
+    let temp <- (fn choice).epp loc
+    (next temp).epp loc
+| Choreo'.Return v, _ => Network.Return v
+
+
+def wrapped := wrap 3 "bob"
+def unwrapped := unwrap wrapped (l:="bob")
+#eval unwrapped
+
+
+
+notation:55 lv "~>" receiver => send_recv lv receiver
+
+-- notation:55 sender "~>" receiver "##" comp => send_recv_locally sender receiver comp
+-- notation:55 sender "~>" receiver "pure" comp => send_recv_pure sender receiver comp

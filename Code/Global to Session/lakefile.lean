@@ -1,19 +1,28 @@
 import Lake
 open Lake DSL
 
-package «test» where
+package «default» where
+--   lean
 
   -- add package configuration options here
+
+
+lean_lib «Meeting_12_02» where
+  leanOptions := #[⟨`relaxedAutoImplicit, false⟩]
 
 lean_lib «chorlean» where
 lean_lib «Test» where
   -- add library configuration options here
+
+require mathlib from git
+  "https://github.com/leanprover-community/mathlib4.git"
 require socket from git
-  "https://github.com/hargoniX/socket.lean/" @ "main"
+  "https://github.com/SimonDaniel21/socket.lean" @ "main"
 --  "https://github.com/xubaiw/lean4-socket.git"
 
 -- require mathlib from git
 --   "https://github.com/leanprover-community/mathlib4.git"
+
 
 @[default_target]
 lean_exe «test» where
@@ -72,6 +81,11 @@ lean_exe auth where
 
 lean_exe merge where
   root := `chorlean.examples.mergesort
+  moreLeancArgs := #["-fPIC"]
+  supportInterpreter := true
+
+lean_exe play where
+  root := `Meeting_12_02.playground6
   moreLeancArgs := #["-fPIC"]
   supportInterpreter := true
 

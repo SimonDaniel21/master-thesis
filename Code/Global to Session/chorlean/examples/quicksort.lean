@@ -32,6 +32,10 @@ def unwrap (lv: a @ l) (_ex: notEmpty lv :=sorry):  a := match lv with
 | LocVal.Wrap v =>  v
 
 
+def valid {α: Type} {loc: String} (lv: α @ loc) (p: notEmpty lv) :=  Type
+
+def test_valid: valid (wrap 2 "alice") sorry := wrap (2) "alice"
+
 inductive ValidLocVal (α: Type) (loc: String) where
 | val: α -> ValidLocVal α loc
 
