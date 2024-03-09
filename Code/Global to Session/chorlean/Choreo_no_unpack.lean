@@ -112,13 +112,12 @@ notation:55 lv "~>" receiver => send_recv lv receiver
 
 
 def cast_gv (gv: GVal a owner ep) [k:∀ x, Coe (GVal x owner ep) x]: a :=
-  let c := k a
-  c.coe gv
+  (k a).coe gv
 
-
+notation:max "⤉" gv => cast_gv gv
 
 -- works similiar to normal coersion arrow ↑ but always casts to the underlying type
-notation:max "⤉" gv => cast_gv gv
+
 
 def silent_post (ep:String): Choreo ep (GVal (List String) "alice" ep):= do
 

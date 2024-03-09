@@ -69,7 +69,7 @@ inductive LocVal (α: Type) (loc: String) where
 | Empty: LocVal α loc
 \end{lstlisting}
 Here \emph{LocVal.Wrap} elements are representing Values at the Location \emph{loc} where LocVal simply holds a Value of a given type \emph{ alpha }.
-The \emph{Empty} Option represents the abscence of an actual \emph{\alpha} Value for all locations other than \emph{loc}. This is important in the endpoint projection process. We present two functions to go from and to a LocVal from a given Value of any Type \alpha:
+The \emph{Empty} Option represents the abscence of an actual \emph{alpha} Value for all locations other than \emph{loc}. This is important in the endpoint projection process. We present two functions to go from and to a LocVal from a given Value of any Type alpha:
 
 \begin{lstlisting}[language=lean]
 def wrap {a} (v:a) (l: String): a @ l:=

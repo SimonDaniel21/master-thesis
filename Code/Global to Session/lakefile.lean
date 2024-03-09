@@ -64,6 +64,12 @@ lean_exe silent_post where
   moreLeancArgs := #["-fPIC"]
   supportInterpreter := true
 
+lean_exe silent_post_temp where
+  root := `chorlean.Choreo
+  moreLeancArgs := #["-fPIC"]
+  supportInterpreter := true
+
+
 lean_exe bookseller where
   root := `chorlean.examples.bookseller
   moreLeancArgs := #["-fPIC"]

@@ -1,59 +1,65 @@
-import chorlean.Choreo_nomut
+import chorlean.Choreo
 
-def bookseller_cfg := gen_fullmesh_cfg ["buyer", "seller"]
+inductive Location
+| buyer | seller
+deriving Repr, Fintype
 
+instance : FinEnum Location :=
+  FinEnum.ofEquiv _ (proxy_equiv% Location).symm
 
-def book_seller: Choreo (Option (String @"buyer")):= do
+open Location
 
-  let budget := wrap 150 "buyer"
+def book_seller (ep: Location) (budget: GVal buyer ep Nat): Choreo ep (Option (GVal buyer ep String)):= do
 
-
-  let title <- locally "buyer" (fun _ => do
+  let title <- locally buyer do
     IO.println "enter a book title:"
     return <- IO.getLine
-  )
-  let title' <- title ~> "seller"
 
-  let price <- compute "seller" fun un => if (un title') == "Faust" then 100 else 200
-  let price <- price ~> "buyer"
+  let title' <- title ~> seller
 
-  let _ <- locally "seller" (fun un => do
-    IO.println s!"got book title: {un title'}"
-  )
+  let price <- compute seller (if (⤉ title') == "Faust" then 100 else 200)
+  let price <- price ~> buyer
 
-  let decision: LocVal Bool "buyer" <- compute "buyer" fun un => (un budget >= un price)
+  let _ <- locally seller do
+    IO.println s!"got book title: {title'}"
 
-  branch decision fun
+  let d: GVal  buyer ep Bool <- compute buyer ((⤉budget) >= (⤉price))
+
+  branch d fun
   | true => do
-    let date <- locally "seller" (fun _ => do
+    let date <- locally seller do
       IO.println "enter the delivery date:"
       return <- IO.getLine
-    )
-    let date <- date ~> "buyer"
+
+    let date <- date ~> buyer
     return some date
   | false => do
 
-    let _ <- locally "seller" (fun _un => do
+    let _ <- locally seller do
       IO.println s!"the customer declined the purchase"
-    )
-    let _ <- locally "buyer" (fun un => do
-      IO.println s!"{un title} has a price of {un price} exceeding your budget of {un budget}!"
-    )
+
+    let _ <- locally buyer do
+      IO.println s!"{⤉ title} has a price of {⤉ price} exceeding your budget of {⤉ budget}!"
+
     return none
-
-
-
-def ping: Choreo (Unit):= do
-  let data := wrap [4424, 424, 22, 4] "buyer"
-  while true do
-    let data <- data ~> "seller"
-    let data <- data ~> "buyer"
-    let data <- data ~> "seller"
-
 
 def main (args : List String): IO Unit := do
   let mode := args.get! 0
-  let net <- init_network bookseller_cfg mode
-  let res <- ((ping).epp mode (by sorry)).run mode net
-  IO.println (s!"res: {res}")
-  return ()
+
+  let ep_opt := FinEnum.ofString? mode
+  if h: (ep_opt.isSome) then
+    let ep := ep_opt.get h
+
+    let net <-  init_network ep
+
+    have: Network ep := net.toNet
+
+    let budget := GVal.wrap buyer ep (args.get! 1).toNat!
+
+    let res <- ((book_seller ep budget).epp)
+    IO.println (s!"res: {res}")
+
+    return ()
+  else
+    IO.println s!"{mode} is no valid endpoint"
+    return ()

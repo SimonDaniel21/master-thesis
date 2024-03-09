@@ -1,9 +1,12 @@
-import chorlean.Choreo_nomut
+import chorlean.Choreo
 
 
-def Workers := ["N1", "N2", "N3", "N4"]
-def merge_cfg := gen_fullmesh_cfg Workers
+inductive Location
+| N1 | N2 | N3 | N4
+deriving Repr, Fintype
 
+instance : FinEnum Location :=
+  FinEnum.ofEquiv _ (proxy_equiv% Location).symm
 
 def generate_random_list_rec: (l: List Nat) -> Nat -> IO (List Nat)
 | _, 0 =>  return []
@@ -24,13 +27,13 @@ def generate_random_list (n:Nat): IO (List Nat) := do
 
 -- takes two sorted lists as an input and produces a sorted list of all numbers
 def merge: List Nat -> List Nat -> List Nat
-| a::as, b::bs =>
+| a::as2, b::bs =>
   if a < b then
-    [a] ++ merge as ([b] ++ bs)
+    [a] ++ merge as2 ([b] ++ bs)
   else
-    [b] ++ merge ([a] ++ as) bs
+    [b] ++ merge ([a] ++ as2) bs
 | [], [] => []
-| as, [] => as
+| as2, [] => as2
 | [], bs => bs
 
 partial def sort2 (m w1 w2: String) (others : List String) (l: (List Nat) @ m) (indents: Nat:= 0): Choreo ((List Nat) @ m) := do
@@ -38,7 +41,7 @@ partial def sort2 (m w1 w2: String) (others : List String) (l: (List Nat) @ m) (
   branch l fun
   | [] | _::[] =>
     return l
-  | a::as => do
+  | a::as2 => do
     --let sizef: Float @ "M" <- compute "M" fun un => (un size).toFloat
     let pivot <- compute m fun un => (Float.floor ((un size).toFloat / 2)).toUInt16.toNat
     let ls <- compute m fun un => (un l).seperate (un pivot)
@@ -68,25 +71,25 @@ partial def sort2 (m w1 w2: String) (others : List String) (l: (List Nat) @ m) (
         IO.println s!"{repeat_string "  " indents}merged {un res}"
     return res
 
-def sort (m w1 w2: String) (others : List String) (l: (List Nat) @ m) (indents: Nat:= 0): Choreo ((List Nat) @ m) := do
-  let size <- compute m fun un => (un l).length
+def sort (m w1 w2: Location) (others : List Location) (l: GVal m ep (List Nat)) (indents: Nat:= 0): Choreo ep (GVal m ep (List Nat)) := do
+  let size <- compute m ((⤉l).length)
   branch size fun
   | 0 | 1 =>
     return l
   | _ => do
     --let sizef: Float @ "M" <- compute "M" fun un => (un size).toFloat
-    let pivot <- compute m fun un => (Float.floor ((un size).toFloat / 2)).toUInt16.toNat
-    let ls <- compute m fun un => (un l).seperate (un pivot)
-    let l1 <- compute m fun un => (un ls).fst
-    let l2 <- compute m fun un => (un ls).snd
+    let pivot <- compute m (Float.floor ((⤉ size).toFloat / 2)).toUInt16.toNat
+    let ls <- compute m ((⤉ l).seperate (⤉ pivot))
+    let l1 <- compute m (⤉ ls).fst
+    let l2 <- compute m (⤉ ls).snd
 
     let node_list_w1 := others ++ [m, w2]
     let node_list_w2 := others ++ [m, w1]
     let (w1_workers, w1_others) := node_list_w1.seperate 2
     let (w2_workers, w2_others) := node_list_w2.seperate 2
 
-    let _ <- locally m fun un => do
-      IO.println s!"{repeat_string "  " indents}splitting {un l1}{un l2}"
+    let _ <- locally m do
+      IO.println s!"{repeat_string "  " indents}splitting {⤉l1}{⤉l2}"
 
     let l1 <- l1 ~> w1
     let l1_sorted <- sort w1 w1_workers[0]! w1_workers[1]! w1_others l1 (indents+1)

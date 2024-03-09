@@ -1,6 +1,9 @@
 import Socket
-
-
+import Mathlib.Data.FinEnum
+--prints sent and received network bytes
+def dbg_print_net_msgs := true
+def dbg_print_init_sockets := true
+def dbg_print_net_bytes := false
 
 -- millis to wait for resend after a failed send try
 def send_timeout_duration: UInt32 := 200
@@ -181,13 +184,6 @@ def test_bytes := ["hellö", "world","shrt", "longer text"].to_bytes
 def test_bytes2:= empty_nats.to_bytes
 
 
---#eval List.from_bytes test_bytes (a:=String)
---#eval List.from_bytes test_bytes2 (a:=Nat)
-
-def tn: Nat :=3
-#eval (Serialize.pretty " 2")
-
-
 abbrev Address := Socket.SockAddr4
 
 instance: ToString Address where
@@ -205,18 +201,9 @@ def Socket.send_val2 (sock: Socket) (msg: t) [Serialize t]: IO Unit := do
   let size_info: ByteArray := payload.size.toUInt16.to_bytes
   let bytes := size_info ++ payload
   let sz ← sock.send bytes
-  IO.println s!"send bytes: {bytes}"
+  if dbg_print_net_bytes then
+    IO.println s!"send bytes {bytes}"
   assert! sz == bytes.size.toUSize
-
-
--- def broadcast (msg: t) [Serialize t]: List address -> IO Unit
--- | [] => return ()
--- | a::as =>
---   do
---   a.send msg
---   broadcast msg as
-
-
 
 def Socket.SockAddr4.connect_to (addr: Address): IO Socket := do
   let sock ← Socket.mk .inet .stream
@@ -253,13 +240,13 @@ def Socket.recv_val2 (sock: Socket) (max: USize := 4096) [Serialize t]: IO t := 
   match size_info_opt with
   | .ok size_info =>
     let payload <- sock.recv (USize.ofNat size_info.toNat)
-    IO.println s!"recv bytes: {payload}"
+    if dbg_print_net_bytes then
+      IO.println s!"recv bytes {payload}"
     if payload.size != size_info.toNat then throw (IO.Error.otherError 2 s!"payload size [{size_info}] does not match up with received [{payload.size}]")
 
     let msg := Serialize.from_bytes payload
     match msg with
     | .ok val =>
-      --IO.println s!"recv: {msg}"
       return val
     | .error e => throw (IO.Error.userError e)
   | .error e => throw (IO.Error.userError e)
@@ -303,3 +290,24 @@ def combine {α: Type} (lst: List (List α)): List α :=
   | [] => []
   | x::xs => combine_two x (combine xs)
 -/
+
+
+def default_adress (k:δ × δ) (p: k.1 ≠ k.2) (start_port: Nat := 2222) [FinEnum δ]:  Address :=
+  let port: Nat := start_port + (FinEnum.equiv k.1) * (FinEnum.card δ) + (FinEnum.equiv k.2)
+  .v4  (.mk 127 0 0 1) port.toUInt16
+
+def reprName (v:α) [Repr α]: String :=
+  let rs := reprStr v
+  (rs.dropWhile (fun x => x != '.')).drop 1
+
+def FinEnum.ofString? (s:String) [FinEnum α][Repr α]:  Option α := do
+  for e in (FinEnum.toList α) do
+    if (reprName e == s) then
+      return e
+  Option.none
+
+def FinEnum.ofString! (s:String) [FinEnum α][Repr α] [Inhabited α]:  α :=
+  let opt := FinEnum.ofString? s
+  match opt with
+  | some v => v
+  | none => Inhabited.default

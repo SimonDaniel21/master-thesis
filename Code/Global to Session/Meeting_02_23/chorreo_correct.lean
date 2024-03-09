@@ -120,7 +120,7 @@ def silent_post (ep:String): Choreo ep (GVal (List String) "alice" ep):= do
     return <- IO.getLine
   )
 
-  let msg <- send_recv input "eve"
+  let msg <- input ~> "eve"
   let msg <- locally "eve" fun h => return [(msg.unwrap h), "eve"]
 
   let msg <- send_recv msg "bob"

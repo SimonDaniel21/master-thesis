@@ -28,7 +28,7 @@ def gen_fullmesh_cfg_for: String -> List String -> (port:UInt16:=3333) -> Cfg
 
 
 -- creates a fully meshed net configuration
-def gen_fullmesh_cfg: (locs: List String) -> (port:UInt16:=3333) -> (missing: List String := locs) -> Cfg
+def gen_fullmesh_cfg : (locs: List String) -> (port:UInt16:=3333) -> (missing: List String := locs) -> Cfg
 | _, _, [] => []
 | all, p, l::ls => gen_fullmesh_cfg_for l all p ++ gen_fullmesh_cfg all (p + UInt16.ofNat (all.length - 1)) ls
 

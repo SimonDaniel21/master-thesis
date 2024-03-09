@@ -25,7 +25,10 @@ def unwrap (lv: a @ l) (_ex: exists_locally lv :=sorry):  a := match lv with
 | LocVal.Wrap v =>  v
 
 
-def Unwrap (l:String)  :=   {a:Type} -> a @ l -> a
+--def Unwrap (l:String)  :=   {a:Type} -> a @ l -> a
+
+
+
 
 def local_func (a:Type) (l:String):= (Unwrap l -> a)
 def local_prog (a:Type) (l:String):= (Unwrap l -> IO a)
@@ -40,15 +43,11 @@ mutual
   | Return: a -> Session a
 end
 
-def local_comp_type (l:String) (a:Type) := ({x:Type} -> x @ l -> x) -> IO a
-
-def local_comp: local_comp_type "alice" Nat := fun unpack =>
-  -- here i can use Dist_Vals using unpack
 
 mutual
   inductive ChorEff: Type -> Type 1 where
   | Send_recv [Serialize a]: {sender:String} -> a @ sender -> (receiver:String) -> ChorEff (a @ receiver)
-  | Local : (loc:String) -> (Unwrap loc -> IO a) -> ChorEff (a @ loc)
+  | Local : (loc:String) -> ([∀ α, Coe (α @ l) α]  -> IO a) -> ChorEff (a @ loc)
   | Calc : (loc:String) -> (Unwrap loc -> a) -> ChorEff (a @ loc)
   | Cond [Serialize a]: a @ decider -> (a -> Choreo b) -> ChorEff b
 

@@ -2,11 +2,16 @@ structure with_logs (l: Type) (t: Type) where
   value: t
   logs: List l
 
+def with_logs.Myget {l t:Type} (k:with_logs l t) :  List l :=
+  k.logs
+
 instance: ToString (with_logs String Nat) where
   toString := fun v_with_logs => "value => " ++ toString v_with_logs.value ++ "\nLogs =>" ++ toString v_with_logs.logs
 
 def append (s: List String): with_logs String PUnit :=
   {value:= (), logs:= s}
+
+
 
 
 def my_add2(v: Nat) : with_logs String Nat :=
@@ -31,6 +36,7 @@ instance: Monad (with_logs String) where
 def test: with_logs String Nat := (do
   let x <- my_add2 2
   let y <- my_mult3 x
+  let temp :=with_logs.Myget
   return y)
 
 #eval test
