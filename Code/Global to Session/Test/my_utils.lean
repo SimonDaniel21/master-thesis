@@ -300,6 +300,11 @@ def reprName (v:α) [Repr α]: String :=
   let rs := reprStr v
   (rs.dropWhile (fun x => x != '.')).drop 1
 
+inductive Foo : Type
+| a : Foo
+| b : Nat -> Foo
+deriving Repr
+
 def FinEnum.ofString? (s:String) [FinEnum α][Repr α]:  Option α := do
   for e in (FinEnum.toList α) do
     if (reprName e == s) then

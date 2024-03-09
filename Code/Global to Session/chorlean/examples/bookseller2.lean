@@ -107,7 +107,7 @@ def someCalc (v: Nat ⊕ UInt8): Nat := match v with
 
 def main (args : List String): IO Unit := do
   let mode := args.get! 0
-  let ep_opt := FinEnum.fromString? mode
+  let ep_opt := FinEnum.ofString? mode
   if h: (ep_opt.isSome) then
     let ep := ep_opt.get h
 
