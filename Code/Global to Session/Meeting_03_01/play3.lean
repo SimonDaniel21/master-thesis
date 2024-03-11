@@ -39,7 +39,12 @@ class Network (ep: δ) (M : ( Type -> Type) ) where
   com {μ:Type} [Serialize μ]: {s: δ} -> GVal s ep μ -> (r: δ) -> M (GVal r ep μ)
 
 
+inductive PrintEff (s:String): Type -> Type 1
+| print: PrintEff s Unit
 
+instance (s:String): MonadLift (PrintEff s) IO where
+  monadLift x := match x with
+   | .print => IO.println s
 
 structure SockChannel {δ:Type} [DecidableEq δ] (sender receiver ep: δ ) where
   recv_sock: GVal receiver ep Socket

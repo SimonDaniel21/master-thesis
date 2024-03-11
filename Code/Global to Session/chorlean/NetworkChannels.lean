@@ -1,229 +1,59 @@
+import chorlean.Freer
+import chorlean.GVal
 import Test.my_utils
 
+#check ReaderT
 
-def dbg_prints := true
+-- Effect Signature that allows sending and receiving Values of types that implement Serialize
+inductive NetEff: Type -> Type 1
+| send {μ: Type} [Serialize μ] : Socket -> μ -> NetEff Unit
+| recv : Socket ->  (μ: Type) -> [Serialize μ] -> NetEff μ
 
-abbrev Cfg := List ((String × String) × (Address))
-abbrev Channel := (String × String)
+-- Interpretation of the NetEff Signature in the IO Monad using Sockets
+instance: MonadLift (NetEff) IO where
+  monadLift x := match x with
+  | NetEff.send sock m=> sock.send_val2 m
+  | NetEff.recv sock μ => sock.recv_val2 (t:=μ)
 
-abbrev PhysChannel := Channel × Socket
+-- Freer Monad over the NetEff Signature
+abbrev NetM := Freer (NetEff)
 
-abbrev Net:= List (Channel)
+-- def send (sock:Socket) (v:μ) [Serialize μ]: NetM Unit := Effect.ToFreer (NetEff.send sock v)
+-- def recv (sock:Socket) {μ:Type} [Serialize μ]: NetM μ := Effect.ToFreer (NetEff.recv sock μ)
 
-structure PhysNet where
-  net: Net
-  sockets: Lean.AssocList Channel Socket
-  p: ∀ (c:Channel), net.contains c -> sockets.contains c
+-- auxiliary Effect, sum type of either a net_eff or local_eff
+inductive LocalProgramEff (leff:Type -> Type 1): Type -> Type 1
+| net_eff: NetEff α -> LocalProgramEff leff α
+| local_eff: leff α -> LocalProgramEff leff α
 
-abbrev sym := true
-abbrev uni := false
-
-
-
-def gen_fullmesh_cfg_for: String -> List String -> (port:UInt16:=3333) -> Cfg
-| _, [], _ => []
-| loc, l::ls, p =>
-  if (l == loc) then
-    gen_fullmesh_cfg_for loc ls p
-  else
-    [((loc, l), .v4 ((.mk 127 0 0 1)) p)] ++ gen_fullmesh_cfg_for loc ls (p+1)
-
-
--- creates a fully meshed net configuration
-def gen_fullmesh_cfg: (locs: List String) -> (port:UInt16:=3333) -> (missing: List String := locs) -> Cfg
-| _, _, [] => []
-| all, p, l::ls => gen_fullmesh_cfg_for l all p ++ gen_fullmesh_cfg all (p + UInt16.ofNat (all.length - 1)) ls
+-- A Monad for Local Effects where leff is the Effect Signature
+abbrev LocalM (leff: Type -> Type 1) := Freer (LocalProgramEff leff)
 
 
--- creates a net cfg from pairs of (Location) Strings, and an additional bool that,
--- if set two true will create a channel in the opposing direction aswell
-def gen_cfg: (locs: List ((String × String) × Bool)) -> (port:UInt16:=3333) -> Cfg
-| [], p => []
-| ((s, r), bidirectional)::ls, p =>
-  let cs := [((s, r), .v4 ((.mk 127 0 0 1)) p)]
-  if (bidirectional) then
-    let p := p+1
-    let cs := cs ++ [((r, s), .v4 ((.mk 127 0 0 1)) p)]
-    cs ++ gen_cfg ls (p+1)
-  else
-    cs ++ gen_cfg ls (p+1)
+instance [MonadLift leff NetM]: MonadLift (LocalProgramEff leff) (NetM) where
+  monadLift x := match x with
+  | .local_eff le => MonadLift.monadLift le
+  | .net_eff ne => Effect.ToFreer ne (Eff:=NetEff)
+
+-- Lifts a Local into the LocalM Monad
+instance : MonadLift (leff) (LocalM leff) where
+  monadLift x := Effect.ToFreer (LocalProgramEff.local_eff x)
+
+-- Lifts a NetEff into the LocalM Monad
+instance : MonadLift (NetEff) (LocalM leff) where
+  monadLift x := Effect.ToFreer (LocalProgramEff.net_eff x)
 
 
-class T (α: Type) where
-  fn: Unit
+-- Lifts an LocalProgrameff into a Monad m if both, net and the loc effect can be lifted into the monad
+instance [MonadLift eff m] [MonadLift NetEff m]: MonadLift (LocalProgramEff eff) m where
+  monadLift x := match x with
+  | .local_eff le => MonadLift.monadLift le
+  | .net_eff ne => MonadLift.monadLift ne
 
-inductive A  where
-| e (α: Type) [T α]: A
-
-def fn: A -> Unit
-| A.e v => ()
-
-inductive NetEff {net: Net}: Type -> Type 1 where
-| Run {a: Type}:  IO a -> NetEff a
-| Send {a: Type} [Serialize a]: String -> a -> NetEff Unit
-| Broadcast {a: Type} [Serialize a]: a -> NetEff Unit
-| Broadcast_except {a: Type} [Serialize a]: List String -> a -> NetEff Unit
-| Recv {a: Type} [Serialize a]: String -> NetEff a
-
-inductive Network {net: Net} (a:Type) where
-| Do    : NetEff b -> (b -> Network a )-> Network a
-| Return: a ->  Network a
-
-
-def NetEff.toString : NetEff a (net:=net) -> String -> String
-| NetEff.Run _comp, loc=> s!"{loc} does computation"
-| NetEff.Send receiver v, sender=> s!"{sender} sends {Serialize.pretty v} to {receiver}"
-| NetEff.Recv sender (a:=b), receiver => s!"{receiver} receives {Serialize.type_name b} from {sender}"
-| NetEff.Broadcast  v, sender => s!"broadcast"
-| NetEff.Broadcast_except  v _, sender => s!"broadcast"
-
-
-instance (loc:String): ToString (NetEff a)  where
-  toString x := x.toString loc
-
--- function that takes a Value, Net and LocString and returns a program that sends the value to
--- all channels that the LocString can send to in the Net
-
-
-def NetEff.run : NetEff a -> String -> Net -> IO a
-| NetEff.Run comp (a:=a), _loc, _net => do
-  if dbg_prints then
-    IO.println s!"program at {_loc}"
-  comp
-| NetEff.Send receiver v, sender, c => do
-  if dbg_prints then
-      IO.println s!"{sender} -> {receiver} ({Serialize.pretty v})"
-  let sock_opt := c.lookup (sender, receiver)
-  match sock_opt with
-  | some sock =>
-    sock.send_val2 v
-  | none =>
-    throw (IO.Error.userError s!"cannot find addr {sender} x {receiver} in cfg for send")
-| NetEff.Recv (a:=_t) sender, receiver, c => do
-  if dbg_prints then
-    IO.println s!"{sender} -> {receiver} :{Serialize.type_name _t}"
-  let sock_opt := c.lookup (sender, receiver)
-  match sock_opt with
-  | some sock =>
-    sock.recv_val2
-  | none =>
-    throw (IO.Error.userError s!"cannot find location {sender} x {receiver} in cfg for receive")
-| NetEff.Broadcast v, loc, ((sender, _receiver), sock)::cs => do
-
-  if (loc == sender) then
-    if dbg_prints then
-      IO.println s!"{sender} -> {_receiver} ({Serialize.pretty v})"
-    sock.send_val2 v
-  (NetEff.Broadcast v).run loc cs
-| NetEff.Broadcast _, loc, [] => return ()
-| NetEff.Broadcast_except es v, loc, ((sender, _), sock)::cs => do
-  if (loc == sender && ! (es.contains sender)) then
-    sock.send_val2 v
-  else
-    (NetEff.Broadcast v).run loc cs
-| NetEff.Broadcast_except _ _, loc, [] => return ()
-
-
-
-
-def Network.run : Network a -> String -> Net ->  IO a
-| Do eff next, loc, net => do
-  let res <- eff.run loc net
-  (next res).run loc net
-| Return v, _, _ => do
-  return v
-
-def Network.bind : Network α → (α → Network β) → Network β
-  | .Do eff next, next' => .Do eff (fun x => bind (next x) next')
-  | .Return v, next' => next' v
-
-instance: Monad Network where
-  pure x := Network.Return x
-  bind  := Network.bind
-
-instance (loc: String) (n: Net): MonadLift Network IO where
-  monadLift := fun x => Network.run x loc n
-
-
-def toNetwork (eff: NetEff a): Network a :=
-  Network.Do eff (Network.Return (a:=a))
-
-
-def run {a:Type} (comp: IO a) := toNetwork (NetEff.Run comp)
-def send {a:Type} (loc: String) (v:a) [Serialize a]:= toNetwork (NetEff.Send loc v)
-def broadcast {a:Type} (v:a) [Serialize a]:= toNetwork (NetEff.Broadcast v)
-def broadcast_except {a:Type} (es: List String) (v:a) [Serialize a]:= toNetwork (NetEff.Broadcast_except es v)
-def recv {a:Type} (loc: String) [Serialize a]:= toNetwork (NetEff.Recv loc (a:=a))
-def send_mult {a:Type} (locs: List String) (v:a) [Serialize a] : Network Unit := match locs with
-| [] => return ()
-| l::ls  => do
-  send l v
-  send_mult ls v
-
-
-def data: UInt16 := 2
-
-def Net_Alice (s: String): Network String := do
-  send "eve" (s ++ "-alice")
-  let res: String <- recv "bob"
-  return res
-
-def Net_Bob: Network (Unit) := do
-  let s: String <- recv "eve"
-  send "alice" (s ++ "-bob")
-
-def Net_Eve: Network Unit := do
-  let s: String <- recv "alice"
-  send "bob" (s ++ "-eve")
-
-
-def test_cfg := gen_fullmesh_cfg ["alice", "bob", "eve"] 6665
-
-#eval test_cfg
---2-2
---3-6
---4-12
---5-20
-
--- epp for initializing one network socket
-def init_channel (loc sender receiver: String) (addr: Address):  IO (Option Channel) := do
-  if sender == receiver then
-    throw (IO.Error.userError "cannot init a channel where sender == receiver")
-  else if (loc == sender) then
-    IO.println s!"waiting for {sender} -> {receiver}"
-    let sock <- addr.connect_to
-    return some ((sender,receiver), sock)
-  else if (loc == receiver) then
-    IO.println s!"waiting for {sender} -> {receiver}"
-    let sock <- addr.listen_on
-    return some ((sender,receiver), sock)
-  else return none
-
-
--- epp for initializing fully meshed network sockets
-def init_network: Cfg -> String -> IO Net
-| ((sender, receiver), addr)::as, loc => do
-  let chn_opt <- init_channel loc sender receiver  addr
-  match chn_opt with
-  | some chnl =>
-    let rest <- init_network as loc
-    return [chnl] ++ rest
-  | none => init_network as loc
-| [], _ => do
-  IO.println "finished network initilization\n"
-  return []
-
-
-def main_ (args : List String): IO Unit := do
-
-  let mode := args.get! 0
-  let net <- init_network test_cfg mode
-  if mode == "alice" then
-    let r <- (Net_Alice (args.get! 1)).run  "alice" net
-    IO.println (s!"res {Serialize.pretty r}")
-  else if mode == "bob" then
-    Net_Bob.run "bob" net
-  else if mode == "eve" then
-    Net_Eve.run "eve" net
-  else
-    IO.println "Unknown Location"
+-- Lifts a NetM into any LocalM (should not be needed?)
+instance why: MonadLift (NetM) (LocalM eff) where
+  monadLift x := match x with
+    | .Do n cont => do
+      let res <- MonadLift.monadLift n
+      Freer.monadLift (cont res)
+    | .Return v => return v

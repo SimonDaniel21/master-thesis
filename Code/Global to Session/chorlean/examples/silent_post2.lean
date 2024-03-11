@@ -1,6 +1,4 @@
 import chorlean.Choreo2
-import chorlean.Effects
-
 
 class ExecutableLocation (δ:Type) where
   m : δ -> (Type u -> Type b)
@@ -17,7 +15,6 @@ open Location
 inductive BuyerEff: Type -> Type 1
 | get_budget: BuyerEff Nat
 | get_title: BuyerEff String
-| print2: String -> BuyerEff Unit
 
 open BuyerEff
 
@@ -26,48 +23,27 @@ instance bi: MonadLift (BuyerEff) IO where
     | .get_budget => do
       IO.println "enter your budget"
       return (<-IO.getLine).toNat!
-    | .get_title => do
+     | .get_title => do
       IO.println "enter your title"
       return (<-IO.getLine)
-    | .print2 s => do
-      IO.print s
-
 
 
 inductive SellerEff: Type -> Type 1
 | lookup_price: String -> SellerEff Nat
 | deliveryDate:  SellerEff String
 open SellerEff
-@[reducible] def EffectOfList  (effs: List (Type -> Type 1) ) :Type -> Type 1 :=
-  effs.foldr (SumEffect) EmptyEff
-
-abbrev summy := (SumEffect SellerEff LogEff)
-open LogEff
-
-def myProg: Freer summy Nat := do
-  let temp <- deliveryDate
-  warning "this is dangerous"
-  info "this is info"
-  error "this is error"
-  return 22
 
 instance si: MonadLift (SellerEff) IO where
   monadLift m := match m with
-    | .lookup_price title => do
-      IO.println "looked up title"
+    | .lookup_price title =>
       return  (if (title) == "Faust" then 100 else 200)
     | .deliveryDate => do
       IO.println "enter the delivery date:"
       return (<-IO.getLine)
 
-
-def myMain: IO Unit := do
-  let temp <- myProg
-  return ()
-
-#eval myMain
-
-
+@[reducible] def effect_of: Location -> (Type -> Type 1)
+| buyer => BuyerEff
+| seller => SellerEff
 
 instance sig: LocSig Location IO where
   sig x := match x with
@@ -78,21 +54,23 @@ instance sig: LocSig Location IO where
     | seller => inferInstance
 
 
+def seller_prog: LocalM SellerEff Nat :=do
+  (lookup_price "he")
+
 def book_seller (ep: Location): Choreo ep (Option (GVal buyer ep String)) (m:=IO):= do
 
-  let budget <- locally buyer get_budget
+  let budget <- locally buyer (do
+    let temp <- get_budget
+    return 3)
   let title <- locally buyer get_title
 
   let title': GVal seller ep String <- title ~> seller
 
-  let price <- locally seller  (lookup_price (⤉ title'))
+  let price <- locally seller do lookup_price (⤉ title')
   let price <- price ~> buyer
 
 
   let d: GVal  buyer ep Bool <- compute buyer ((⤉budget) >= (⤉price))
-
-  let _ <- locally buyer (
-    print2 s!"budget {⤉budget} -- {⤉price}")
 
   branch d fun
   | true => do

@@ -23,6 +23,9 @@ def GVal.wrap (owner:δ) (endpoint: δ) (v:α) : GVal owner endpoint α :=
   else
     GVal.Empty h
 
+class Unpack (loc ep: δ) (α : Type) where
+  unpack : GVal loc ep α → α
+
 def GVal.unwrap {owner endpoint: δ}: GVal owner endpoint α -> (owner = endpoint) -> α
 | Wrap _ v  => fun _ => v
 | Empty q => fun x => by contradiction
@@ -168,8 +171,8 @@ def init_network [DecidableEq δ] [Repr δ] [FinEnum δ] (ep: δ) (as:  (k:δ×�
 
 inductive ChorEff (ep:δ): Type -> Type 1 where
 | Send_recv {μ} [Serialize μ] : {s:δ} -> GVal s ep μ  -> (r:δ) -> ChorEff ep (GVal r ep μ)
-| Local {α} [DecidableEq δ] : (loc:δ) -> ([∀ x, Coe (GVal loc ep x) x] -> IO α) -> ChorEff ep (GVal loc ep α)
-| Calc {α} [DecidableEq δ] : (loc:δ) -> ([∀ x, Coe (GVal loc ep x) x] -> α) -> ChorEff ep (GVal loc ep α)
+| Local {α} [DecidableEq δ] : (loc:δ) -> ([∀ x, Unpack loc ep x] -> IO α) -> ChorEff ep (GVal loc ep α)
+| Calc {α} [DecidableEq δ] : (loc:δ) -> ([∀ x, Unpack loc ep x] -> α) -> ChorEff ep (GVal loc ep α)
 
 inductive Choreo (ep:δ): Type -> Type 1  where
 | Cond {μ} {α} {decider:δ} [DecidableEq δ] [FinEnum δ] [Serialize μ]: GVal decider ep μ -> (μ -> Choreo ep α) -> Choreo ep α
@@ -197,10 +200,10 @@ def toChoreo (eff: ChorEff ep a) : Choreo ep a:=
 def send_recv {s:δ} (gv: GVal s ep μ) (r: δ) :=
   toChoreo (ChorEff.Send_recv gv r )
 
-def locally (loc: δ) (comp: [∀ x, Coe (GVal loc ep x) x] -> IO α) :=
+def locally (loc: δ) (comp: [∀ x, Unpack loc ep x] -> IO α) :=
   toChoreo (ChorEff.Local loc comp) (a:=GVal loc ep α)
 
-def compute (loc: δ) (comp: [∀ x, Coe (GVal loc ep x) x] -> α) :=
+def compute (loc: δ) (comp: [∀ x, Unpack loc ep x] -> α) :=
   toChoreo (ChorEff.Calc loc comp) (a:=GVal loc ep α)
 
 def branch {decider:δ} (gv: GVal decider ep μ) (cont: μ -> Choreo ep α) [FinEnum δ]:=
@@ -210,7 +213,7 @@ def branch {decider:δ} (gv: GVal decider ep μ) (cont: μ -> Choreo ep α) [Fin
 
 
 
-def send_recv_comp (s r: δ)  [Serialize μ] (comp: [∀ x, Coe (GVal s ep x) x] -> IO μ):=
+def send_recv_comp (s r: δ)  [Serialize μ] (comp: [∀ x, Unpack s ep x] -> IO μ):=
   do
   let gv <- locally s comp
   toChoreo (ChorEff.Send_recv gv r) (a:= GVal r ep μ)
@@ -221,14 +224,14 @@ def ChorEff.epp: ChorEff ep a -> (Network ep) -> IO a
   net.com gv receiver
 | ChorEff.Local loc comp, net => do
     if h:( loc = ep) then
-      have (x:Type) : Coe (GVal loc ep x) x := ⟨fun gv => gv.unwrap h⟩
+      have (x:Type) : Unpack loc ep x := ⟨fun gv => gv.unwrap h⟩
       let res <- comp
       return GVal.Wrap h res
     else
       return  GVal.Empty h
 | ChorEff.Calc loc comp, net => do
     if h:( loc = ep) then
-      have (x:Type) : Coe (GVal loc ep x) x := ⟨fun gv => gv.unwrap h⟩
+      have (x:Type) : Unpack loc ep x := ⟨fun gv => gv.unwrap h⟩
       let res := comp
       return GVal.Wrap h res
     else
@@ -261,7 +264,9 @@ def cast_gv {owner ep:δ}  (gv: GVal owner ep α ) [k:∀ x, Coe (GVal owner ep 
   c.coe gv
 
 -- works similiar to normal coersion arrow ↑ but always casts to the underlying type
-notation:55 "⤉" gv => (cast_gv gv)
+--notation:55 "⤉" gv => (cast_gv gv)
+notation:55 "⤉" gv => Unpack.unpack gv
+
 
 syntax "send " ident (" from " ident)? " to " term (" as " ident)?: doElem
 

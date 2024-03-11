@@ -80,6 +80,11 @@ lean_exe bookseller2 where
   moreLeancArgs := #["-fPIC"]
   supportInterpreter := true
 
+lean_exe bookseller3 where
+  root := `chorlean.examples.bookseller3
+  moreLeancArgs := #["-fPIC"]
+  supportInterpreter := true
+
 lean_exe auth where
   root := `chorlean.examples.sso_auth
   moreLeancArgs := #["-fPIC"]

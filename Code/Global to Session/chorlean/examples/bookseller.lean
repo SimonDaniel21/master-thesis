@@ -21,7 +21,7 @@ def book_seller (ep: Location) (budget: GVal buyer ep Nat): Choreo ep (Option (G
   let price <- price ~> buyer
 
   let _ <- locally seller do
-    IO.println s!"got book title: {title'}"
+    IO.println s!"got book title: { ⤉ title'}"
 
   let d: GVal  buyer ep Bool <- compute buyer ((⤉budget) >= (⤉price))
 
