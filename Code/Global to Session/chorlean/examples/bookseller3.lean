@@ -38,15 +38,15 @@ inductive SellerEff: Type -> Type 1
 | lookup_price: String -> SellerEff Nat
 | deliveryDate:  SellerEff String
 open SellerEff
-@[reducible] def EffectOfList  (effs: List (Type -> Type 1) ) :Type -> Type 1 :=
-  effs.foldr (SumEffect) EmptyEff
 
-abbrev summy := (SumEffect SellerEff LogEff)
+abbrev summy := (SellerEff ⨳ LogEff ⨳ CmdInputEff)
 open LogEff
 
 def myProg: Freer summy Nat := do
   let temp <- deliveryDate
-  warning "this is dangerous"
+  let lift: MonadLiftT LogEff (Freer summy) := inferInstance
+  lift.monadLift (warning "this is dangerous")
+
   info "this is info"
   error "this is error"
   return 22
@@ -72,11 +72,18 @@ def myMain: IO Unit := do
 instance sig: LocSig Location IO where
   sig x := match x with
     | buyer =>  BuyerEff
-    | seller =>  SellerEff
+    | seller =>  summy
   liftable x := match x with
     | buyer => inferInstance
     | seller => inferInstance
+  liftable2 x := match x with
+    | buyer => inferInstance
+    | seller => inferInstance
 
+
+-- Versuch Unit Lokale Programme ohne let schreiben zu können
+instance: CoeOut (GVal o ep Unit) Unit where
+  coe _ := ()
 
 def book_seller (ep: Location): Choreo ep (Option (GVal buyer ep String)) (m:=IO):= do
 
@@ -85,7 +92,17 @@ def book_seller (ep: Location): Choreo ep (Option (GVal buyer ep String)) (m:=IO
 
   let title': GVal seller ep String <- title ~> seller
 
-  let price <- locally seller  (lookup_price (⤉ title'))
+
+  let lifter: MonadLiftT (summy) IO := inferInstance
+  let lifter: MonadLiftT (BuyerEff) IO := inferInstance
+
+  let lifter: MonadLiftT (LogEff) (LocalM summy) := inferInstance
+
+  let lifter: MonadLiftT (SellerEff) (LocalM summy) := inferInstance
+
+  let price <- locally seller (MonadLiftT.monadLift (lookup_price (⤉ title')))
+
+  let _ <-locally seller ((LogEff.info ("")))
   let price <- price ~> buyer
 
 

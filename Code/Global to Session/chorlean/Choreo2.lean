@@ -12,8 +12,8 @@ variable {δ: Type} [DecidableEq δ]  -- delta als Location Type
 variable {μ: Type} [Serialize μ]  -- mu wegen msg Type
 
 
-class Network {δ:Type} (ep: δ) where
-  com {μ} [Serialize μ]: {s: δ} -> GVal s ep μ -> (r: δ) -> NetM (GVal r ep μ)
+-- class Network {δ:Type} (ep: δ) where
+--   com {μ} [Serialize μ]: {s: δ} -> GVal s ep μ -> (r: δ) -> NetM (GVal r ep μ)
 
 def Network.broadcast [FinEnum δ] (net: Network ep) {s: δ} (gv:GVal s ep μ): NetM μ := do
 
@@ -134,15 +134,16 @@ def init_network [DecidableEq δ] [Repr δ] [FinEnum δ] (ep: δ) (as:  (k:δ×�
 
 
 -- type with effect signature
-
 class LocSig (δ:Type)  (m: Type -> Type) where
   sig: δ -> (Type -> Type 1)
-  liftable: ∀ (l:δ), MonadLift (sig l) m
+  liftable: ∀ (l:δ), MonadLiftT (sig l) m
+  liftable2: ∀ (l:δ), MonadLiftT (sig l) (LocalM (sig l))
 
 inductive ChorEff (ep:δ) [LocSig δ m]: Type -> Type 1 where
 | Send_recv {μ} [Serialize μ] : {s:δ} -> GVal s ep μ  -> (r:δ) -> ChorEff ep (GVal r ep μ)
 | Local {α} [DecidableEq δ] : (loc:δ) -> ([∀ x, Unpack loc ep x] -> LocalM (LocSig.sig m loc) α) -> ChorEff ep (GVal loc ep α)
 | Calc {α} [DecidableEq δ] : (loc:δ) -> ([∀ x, Unpack loc ep x] -> α) -> ChorEff ep (GVal loc ep α)
+--| Cond2 {decider:δ}: GVal decider ep Bool -> (Freer (ChorEff ep) a) -> (Freer (ChorEff ep) a) -> ChorEff ep a
 
 inductive Choreo (ep:δ) [LocSig δ m]: Type -> Type 1  where
 | Cond {μ} {α} {decider:δ} [DecidableEq δ] [FinEnum δ] [Serialize μ]: GVal decider ep μ -> (μ -> Choreo ep α) -> Choreo ep α
@@ -199,6 +200,7 @@ def branch {decider:δ} [LocSig δ m] (gv: GVal decider ep μ) (cont: μ -> Chor
 
 def ChorEff.epp [LocSig δ m]: ChorEff ep a (δ:=δ) (m:=m) -> (Network ep) -> (LocalM (LocSig.sig m ep)) a
 | ChorEff.Send_recv gv receiver, net => do
+  NetEff.send
   (net.com gv receiver)
 | ChorEff.Local loc comp, net => do
     if h:( loc = ep) then
@@ -214,6 +216,7 @@ def ChorEff.epp [LocSig δ m]: ChorEff ep a (δ:=δ) (m:=m) -> (Network ep) -> (
       return GVal.Wrap h res
     else
       return  GVal.Empty h
+
 
 def  Choreo.epp  [LocSig δ m] {a:Type} :
    Choreo ep a (δ:=δ) (m:=m) -> ( Network ep) -> (LocalM (LocSig.sig m ep)) a

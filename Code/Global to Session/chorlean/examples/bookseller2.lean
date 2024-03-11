@@ -24,7 +24,7 @@ def split_50_50 (borrower lender ep: Location) (j:borrower != lender :=by decide
 
   let share <- compute borrower ((⤉price) / 2)
 
-  let exceeds_budget: Bool @ borrower <- compute borrower ((⤉budget) < (share))
+  let exceeds_budget: Bool @ borrower <- compute borrower ((⤉budget) < (⤉share))
 
   branch exceeds_budget fun
   | true =>

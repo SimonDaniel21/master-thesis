@@ -79,3 +79,31 @@ def unwrap (lv: a @ l) (ex: notEmpty lv):  a := match lv with
 | LocVal.Wrap v =>  v
 
 \end{lstlisting}
+
+\section{Effects and Free Monads}
+In this section i will describe the effect System that i implemented in Lean
+
+\begin{lstlisting}[language=lean]
+inductive Freer (Eff:Type u -> Type v) (α:Type u) where
+| Do: Eff β -> (β -> Freer Eff α) -> Freer Eff α
+| Return: α -> Freer Eff α
+\end{lstlisting}
+
+\begin{lstlisting}[language=lean]
+inductive Freer (Eff:Type u -> Type v) (α:Type u) where
+| Do: Eff β -> (β -> Freer Eff α) -> Freer Eff α
+| Return: α -> Freer Eff α
+\end{lstlisting}
+\begin{lstlisting}[language=lean]
+inductive SumEff (eff1 eff2: Type → Type 1) (α:Type):  Type 1 where
+| eff1: eff1 α → SumEff eff1 eff2 α
+| eff2: eff2 α → SumEff eff1 eff2 α
+\end{lstlisting}
+
+\begin{lstlisting}[language=lean]
+
+inductive EmptyEff: Type → Type 1
+\end{lstlisting}
+
+\begin{lstlisting}[language=lean]
+\end{lstlisting}

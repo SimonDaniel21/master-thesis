@@ -1,21 +1,21 @@
 
 #check ReaderT
 
--- class EffectHandler (eff: Type u -> Type v) (m: Type u -> Type v) [Monad m] where
---   run: eff α -> m α
+-- class EffectHandler (eff: Type u → Type v) (m: Type u → Type v) [Monad m] where
+--   run: eff α → m α
 
-inductive Freer (Eff:Type u -> Type v) (α:Type u) where
-| Do: Eff β -> (β -> Freer Eff α) -> Freer Eff α
-| Return: α -> Freer Eff α
+inductive Freer (Eff:Type u → Type v) (α:Type u) where
+| Do: Eff β → (β → Freer Eff α) → Freer Eff α
+| Return: α → Freer Eff α
 
-def Freer.lift  {m: Type -> Type} [Monad m] [MonadLift eff m]: Freer eff α -> m α
+def Freer.lift  {m: Type → Type} [Monad m] [MonadLift eff m]: Freer eff α → m α
 | .Return v => return v
 | .Do e cont => do
   let res <- MonadLift.monadLift e
   Freer.lift (cont res)
 
 
-@[reducible] def Freer.toFreer {α: Type u} {Eff: Type u -> Type v} (e: Eff α): Freer Eff α :=
+@[reducible] def Freer.toFreer {α: Type u} {Eff: Type u → Type v} (e: Eff α): Freer Eff α :=
   .Do e (fun x =>  .Return x)
 
 -- Lift instance that lifts an Effect into Freer tha only does this single effect
@@ -46,40 +46,44 @@ instance [MonadLiftT eff m] [Monad m]: MonadLiftT (Freer eff) m where
 -- product freer
 --def Freer.product (eff1)
 
-inductive SumEffect (eff1 eff2: Type -> Type 1) (α:Type):  Type 1 where
-| eff1: eff1 α -> SumEffect eff1 eff2 α
-| eff2: eff2 α -> SumEffect eff1 eff2 α
+inductive SumEff (eff1 eff2: Type → Type 1) (α:Type):  Type 1 where
+| eff1: eff1 α → SumEff eff1 eff2 α
+| eff2: eff2 α → SumEff eff1 eff2 α
 
--- Lifts the first Effect alternative into an SumEffect
-instance: MonadLift eff1 (SumEffect eff1 eff2) where
-  monadLift x := SumEffect.eff1 x
+-- Lifts the first Effect alternative into an SumEff
+instance: MonadLift eff1 (SumEff eff1 eff2) where
+  monadLift x := SumEff.eff1 x
 
--- Lifts the sedcond Effect alternative into an SumEffect
-instance: MonadLift eff2 (SumEffect eff1 eff2) where
-  monadLift x := SumEffect.eff2 x
+-- Lifts the sedcond Effect alternative into an SumEff
+instance: MonadLift eff2 (SumEff eff1 eff2) where
+  monadLift x := SumEff.eff2 x
 
 -- transitively an sum Effect into a Monad (or Effect) m if both Effect Signatures can be lifted into m
-instance [MonadLiftT eff1 m] [MonadLiftT eff2 m]: MonadLiftT (SumEffect eff1 eff2) m where
+instance [MonadLiftT eff1 m] [MonadLiftT eff2 m]: MonadLiftT (SumEff eff1 eff2) m where
   monadLift x := match x with
     | .eff1 e1 => MonadLiftT.monadLift e1
     | .eff2 e2 => MonadLiftT.monadLift e2
 
-inductive EmptyEff: Type -> Type 1
+-- short notation for SumEffs
+infixl:65 "⨳" => SumEff
+
+
+inductive EmptyEff: Type → Type 1
 
 
 --- Examples
 
-inductive PrintEff: Type -> Type 1
-| Print1: String -> PrintEff Unit
+inductive PrintEff: Type → Type 1
+| Print1: String → PrintEff Unit
 
-inductive LogEff1: Type -> Type 1
-| Print2: Nat -> LogEff1 Unit
+inductive LogEff1: Type → Type 1
+| Print2: Nat → LogEff1 Unit
 
-inductive LogEff2: Type -> Type 1
-| Print3: Nat -> LogEff2 Unit
+inductive LogEff2: Type → Type 1
+| Print3: Nat → LogEff2 Unit
 
-@[reducible] def LogPrintEff := Freer (SumEffect PrintEff LogEff1)
-@[reducible] def LogPrintEff2 := Freer (SumEffect LogPrintEff LogEff2)
+@[reducible] def LogPrintEff := Freer (SumEff PrintEff LogEff1)
+@[reducible] def LogPrintEff2 := Freer (SumEff LogPrintEff LogEff2)
 
 open PrintEff
 open LogEff1

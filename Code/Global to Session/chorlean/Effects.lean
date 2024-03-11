@@ -12,9 +12,9 @@ instance: MonadLift (LogEff) IO where
     | .error msg => IO.eprintln   s!"[error]   {msg}"
 
 inductive CmdInputEff: Type -> Type 1
-| readString: Option String -> CmdInputEff String
-| readNat: Option String -> CmdInputEff Nat
-| readBool: Option String -> CmdInputEff Bool
+| readString (msg: Option String := none): CmdInputEff String
+| readNat (msg: Option String := none): CmdInputEff Nat
+| readBool (msg: Option String := none): CmdInputEff Bool
 
 instance: MonadLift (CmdInputEff) IO where
   monadLift m := match m with
