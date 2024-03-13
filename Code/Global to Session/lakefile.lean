@@ -55,7 +55,7 @@ lean_exe network where
   supportInterpreter := true
 
 lean_exe choreo where
-  root := `chorlean.Choreo
+  root := `chorlean.Choreo2
   moreLeancArgs := #["-fPIC"]
   supportInterpreter := true
 

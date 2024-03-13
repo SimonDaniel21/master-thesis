@@ -292,7 +292,7 @@ def combine {α: Type} (lst: List (List α)): List α :=
 -/
 
 
-def default_adress (k:δ × δ) (p: k.1 ≠ k.2) (start_port: Nat := 2222) [FinEnum δ]:  Address :=
+def default_adress (k:δ × δ) (start_port: Nat := 2222) [FinEnum δ]:  Address :=
   let port: Nat := start_port + (FinEnum.equiv k.1) * (FinEnum.card δ) + (FinEnum.equiv k.2)
   .v4  (.mk 127 0 0 1) port.toUInt16
 

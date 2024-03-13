@@ -10,19 +10,18 @@ instance : FinEnum Location :=
 
 open Location
 
-instance sig: LocSig Location IO where
+instance sig: LocSig Location where
   sig x := match x with
-    | N1 =>  EmptyEff
-    | N2 =>  EmptyEff
-    | N3 =>  EmptyEff
-    | N4 =>  EmptyEff
-  liftable x := match x with
+    | N1 =>  LogEff
+    | N2 =>  LogEff
+    | N3 =>  LogEff
+    | N4 =>  LogEff
+  executable x := match x with
     | N1 => inferInstance
     | N2 => inferInstance
     | N3 => inferInstance
     | N4 => inferInstance
-  liftable2 x := match x with
-    | _ => inferInstance
+
 
 
 
@@ -54,64 +53,28 @@ def merge: List Nat -> List Nat -> List Nat
 | as2, [] => as2
 | [], bs => bs
 
-partial def sort2 (m w1 w2: String) (others : List String) (l: (List Nat) @ m) (indents: Nat:= 0): Choreo ((List Nat) @ m) := do
-  let size <- compute m fun un => (un l).length
+partial def sort (m w1 w2: Location) (others : List Location) (l: GVal m ep (List Nat) ) (indents: Nat:= 0): Choreo ep (GVal m ep (List Nat)) := do
+  let size <- locally m do return (⤉l).length
   branch l fun
   | [] | _::[] =>
     return l
   | a::as2 => do
-    --let sizef: Float @ "M" <- compute "M" fun un => (un size).toFloat
-    let pivot <- compute m fun un => (Float.floor ((un size).toFloat / 2)).toUInt16.toNat
-    let ls <- compute m fun un => (un l).seperate (un pivot)
-    let l1 <- compute m fun un => (un ls).fst
-    let l2 <- compute m fun un => (un ls).snd
+    --let sizef: Float @ "M" <- locally "M" f⤉⤉=> (⤉size).toFloat
+    let pivot <- locally m do return (Float.floor ((⤉size).toFloat / 2)).toUInt16.toNat
+    let ls <- locally m do return  (⤉l).seperate (⤉pivot)
+    let l1 <- locally m do return (⤉ls).fst
+    let l2 <- locally m do return (⤉ls).snd
 
     let node_list_w1 := others ++ [m, w2]
     let node_list_w2 := others ++ [m, w1]
     let (w1_workers, w1_others) := node_list_w1.seperate 2
     let (w2_workers, w2_others) := node_list_w2.seperate 2
 
-    let _ <- locally m fun un => do
-      IO.println s!"{repeat_string "  " indents}splitting {un l1}{un l2}"
-
-    --have h: l1 < l.length := by sorry
-    let l1_sorted <- sort2 w1 w1_workers[0]! w1_workers[1]! w1_others l1 (indents+1)
-
-    let l2 <- l2 ~> w2
-    let l2_sorted <- sort2 w2 w2_workers[0]! w2_workers[1]! w2_others l2 (indents+1)
-
-    let l1_sorted <- l1_sorted ~> m
-    let l2_sorted <- l2_sorted ~> m
-
-    let res <- compute m fun un => merge (un l1_sorted) (un l2_sorted)
-
-    let _ <- locally m fun un => do
-        IO.println s!"{repeat_string "  " indents}merged {un res}"
-    return res
-
-def sort (m w1 w2: Location) (others : List Location) (l: GVal m ep (List Nat)) (indents: Nat:= 0): Choreo ep (GVal m ep (List Nat)) := do
-  let size <- compute m ((⤉l).length)
-  branch size fun
-  | 0 | 1 =>
-    return l
-  | _ => do
-    --let sizef: Float @ "M" <- compute "M" fun un => (un size).toFloat
-    let pivot <- compute m (Float.floor ((⤉ size).toFloat / 2)).toUInt16.toNat
-    let ls <- compute m ((⤉ l).seperate (⤉ pivot))
-    let l1 <- compute m (⤉ ls).fst
-    let l2 <- compute m (⤉ ls).snd
-
-    let node_list_w1 := others ++ [m, w2]
-    let node_list_w2 := others ++ [m, w1]
-    let (w1_workers, w1_others) := node_list_w1.seperate 2
-    let (w2_workers, w2_others) := node_list_w2.seperate 2
-
-    let _ <- locally m do
+    let _ <- locally m do return  do
       IO.println s!"{repeat_string "  " indents}splitting {⤉l1}{⤉l2}"
 
-    let l1 <- l1 ~> w1
+    --have h: l1 < l.length := by sorry
     let l1_sorted <- sort w1 w1_workers[0]! w1_workers[1]! w1_others l1 (indents+1)
-
 
     let l2 <- l2 ~> w2
     let l2_sorted <- sort w2 w2_workers[0]! w2_workers[1]! w2_others l2 (indents+1)
@@ -119,29 +82,42 @@ def sort (m w1 w2: Location) (others : List Location) (l: GVal m ep (List Nat)) 
     let l1_sorted <- l1_sorted ~> m
     let l2_sorted <- l2_sorted ~> m
 
-    let res <- compute m fun un => merge (un l1_sorted) (un l2_sorted)
+    let res <- locally m do return  merge (⤉l1_sorted) (⤉l2_sorted)
 
-    let _ <- locally m fun un => do
-        IO.println s!"{repeat_string "  " indents}merged {un res}"
+    let _ <- locally m do return  do
+        IO.println s!"{repeat_string "  " indents}merged {⤉res}"
     return res
-decreasing_by simp
+
 
 def main (args : List String): IO Unit := do
-  let mode := args.get! 0
-  let net <- init_network merge_cfg mode
+
   IO.println (s!"mergesort")
+  let mode := args.get! 0
 
-  let main_node := Workers[0]
+  let ep_opt := FinEnum.ofString? mode
 
-  let input_size_chor: Choreo ((List Nat) @ main_node) := do
-    return <- locally main_node fun un => do
-      IO.println "enter the size of the List to sort:"
+  if h: (ep_opt.isSome) then
+    let ep := ep_opt.get h
+    have:= NetEPP ep
+    have := (sig.executable ep)
+    let e := EPP ep
+
+    let main_node := Workers[0]
+
+    let input_size_chor: Choreo ep ( GVal main_node ep (List Nat)) := do
+    return <- locally N1 do
+      LogEff.info "enter the size of the List to sort:"
       let len := (<-IO.getLine).toNat!
       let lst <- generate_random_list len
       return lst
 
-  let input <- ((input_size_chor).epp mode ( by sorry)).run mode net
+  let input <- ((input_size_chor).epp mode ( by sorry)).r⤉mode net
 
-  let res <- ((sort main_node Workers[1] Workers[2] (Workers.seperate 3).snd input).epp mode ( by sorry)).run mode net
+  let res <- ((sort main_node Workers[1] Workers[2] (Workers.seperate 3).snd input).epp mode ( by sorry)).r⤉mode net
   IO.println (s!"res: {unwrap res}")
-  return ()
+
+    let r <- test
+    return ()
+  else
+    IO.println s!"{mode} is no valid endpoint"
+    return ()

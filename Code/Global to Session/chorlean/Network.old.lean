@@ -11,6 +11,10 @@ abbrev Net:= List (Channel)
 abbrev sym := true
 abbrev uni := false
 
+inductive Freer (Eff:Type u → Type v) (α:Type w) where
+| Do: Eff β → (β → Freer Eff α) → Freer Eff α
+| Return: α → Freer Eff α
+
 def HasChannel (s r: String) (net:Net) : Bool :=
   let c_opt := net.lookup (s, r)
   match c_opt with

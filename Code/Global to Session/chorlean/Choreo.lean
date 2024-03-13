@@ -11,6 +11,8 @@ variable {α β: Type} -- alpha beta als normaler Type
 variable {δ: Type} [DecidableEq δ]  -- delta als Location Type
 variable {μ: Type} [Serialize μ]  -- mu wegen msg Type
 
+
+
 inductive GVal (owner endpoint: δ) (α: Type)   where
 | Wrap:  (owner = endpoint) -> α -> GVal owner endpoint α
 | Empty: (owner ≠ endpoint) -> GVal owner endpoint α

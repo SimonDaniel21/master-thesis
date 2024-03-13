@@ -49,30 +49,28 @@ instance si: MonadLift (SellerEff) IO where
       IO.println "enter the delivery date:"
       return (<-IO.getLine)
 
-instance sig: LocSig Location IO where
+instance sig: LocSig Location where
   sig x := match x with
     | buyer =>  BuyerEff ⨳ LogEff
     | seller =>  SellerEff ⨳ LogEff
     | friend => FriendEff ⨳ LogEff
-  liftable x := match x with
+  executable x := match x with
     | buyer => inferInstance
     | seller => inferInstance
     | friend => inferInstance
-  liftable2 x := match x with
-    | _ => inferInstance
 
 
 open LogEff
 
 -- Type of Negotiation Choreo where l1 is the Location of the borrower
-def negT  {l1 ep:Location}:=  GVal l1 ep Nat -> GVal l1 ep Nat -> Choreo ep (Bool @ l1 # ep) (m:=IO)
+def negT  {l1 ep:Location}:=  GVal l1 ep Nat -> GVal l1 ep Nat -> Choreo ep (Bool @ l1 # ep)
 
 
 -- b - borrower - l - lender
 def split_50_50 (b l ep: Location) [MonadLiftT FriendEff (sig.sig l)]: negT (l1:=b) (ep:= ep) :=
   fun budget price => do
-    let share <- compute b ((⤉price) / 2)
-    let exceeds_budget: Bool @ b <- compute b ((⤉budget) < (⤉share))
+    let share <- locally b do return ((⤉price) / 2)
+    let exceeds_budget: Bool @ b <- locally b do return ((⤉budget) < (⤉share))
 
     branch exceeds_budget fun
     | true =>
@@ -86,7 +84,7 @@ def split_50_50 (b l ep: Location) [MonadLiftT FriendEff (sig.sig l)]: negT (l1:
 
 def pay_rest (b l ep: Location) [MonadLiftT FriendEff (sig.sig l)]: negT (l1:=b) (ep:= ep) := fun budget price => do
 
-  let missing <- compute b ((⤉price) - (⤉budget))
+  let missing <- locally b do return ((⤉price) - (⤉budget))
 
   branch missing fun
   | 0 => do
@@ -99,7 +97,7 @@ def pay_rest (b l ep: Location) [MonadLiftT FriendEff (sig.sig l)]: negT (l1:=b)
 
 
 def book_seller (negotiate: negT  (l1:=buyer) (ep:=ep))
-  : Choreo ep (Option (String @ buyer # ep)) (m:=IO):= do
+  : Choreo ep (Option (String @ buyer # ep)) := do
 
   have: MonadLiftT BuyerEff  (BuyerEff ⨳ LogEff) := inferInstance
   have: MonadLiftT LogEff (BuyerEff ⨳ LogEff) := inferInstance
@@ -135,7 +133,7 @@ def book_seller (negotiate: negT  (l1:=buyer) (ep:=ep))
       warning s!"the customer declined the purchase"
 
     let _ <- locally buyer do
-      error s!"{⤉title} has a price of {⤉price} exceeding your budget of {150}!"
+      error s!"{⤉title} has a price of {⤉price} exceeding your budget of {⤉budget}!"
 
     return none
 
@@ -145,32 +143,23 @@ def main (args : List String): IO Unit := do
 
   let ep_opt := FinEnum.ofString? mode
 
-  let bobby : LocalM BuyerEff Unit := do
-    let temp := BuyerEff.get_title
-    return ()
-  let bres <- MonadLiftT.monadLift bobby
-
   if h: (ep_opt.isSome) then
     let ep := ep_opt.get h
 
-    let net <-  init_network ep
+    --let net <-  init_network ep
 
-    have: Network ep := net.toNet
-
-    let budget := GVal.wrap buyer ep (args.get! 1).toNat!
-
-    have := (sig.liftable ep)
-
-    --IO.println (s!"res: {res}")
+    have:= NetEPP ep
+    have := (sig.executable ep)
+    let e := EPP ep
 
     IO.println (s!"starting bookseller 50 50")
 
     have: MonadLiftT (FriendEff) (FriendEff ⨳ LogEff) := inferInstance
 
-    let res <- ((book_seller (split_50_50 buyer friend ep)).epp  net.toNet)
+    let res <- e.monadLift (book_seller (split_50_50 buyer friend ep))
 
     IO.println (s!"\n\nstarting bookseller pay rest")
-    let res <- ((book_seller (pay_rest buyer friend ep)).epp  net.toNet)
+    let res <- e.monadLift (book_seller (pay_rest buyer friend ep))
     return ()
   else
     IO.println s!"{mode} is no valid endpoint"
