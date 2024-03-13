@@ -89,20 +89,117 @@ inductive Freer (Eff:Type u -> Type v) (α:Type u) where
 | Return: α -> Freer Eff α
 \end{lstlisting}
 
-\begin{lstlisting}[language=lean]
-inductive Freer (Eff:Type u -> Type v) (α:Type u) where
-| Do: Eff β -> (β -> Freer Eff α) -> Freer Eff α
-| Return: α -> Freer Eff α
-\end{lstlisting}
-\begin{lstlisting}[language=lean]
-inductive SumEff (eff1 eff2: Type → Type 1) (α:Type):  Type 1 where
-| eff1: eff1 α → SumEff eff1 eff2 α
-| eff2: eff2 α → SumEff eff1 eff2 α
-\end{lstlisting}
 
 \begin{lstlisting}[language=lean]
 inductive EmptyEff: Type → Type 1
 \end{lstlisting}
 
 \begin{lstlisting}[language=lean]
+\end{lstlisting}
+
+
+\section{Examples}
+
+This Section presents four choreographic programs, to demonstrate how choreographies can be written in Lean using the chorlean library. The first example \ref{ss:silent} shows a very basic communication scheme. In the \ref{ss:book} example a already more complex protocol is presented to highlight higher Level Choreographies aswell as Location Polymorphism. \ref{ss:sso} Shows an application of a simple cryptographic protocol for a SSO service and the last example \ref{ss:merge} showcases a compute heavy application that balances compute load of a sorting algorithm across a set of  nodes.
+
+\subsection{silent post}
+\label{ss:silent}
+This first Distributed protocol is kept simple to demonstrate some of the features(TODO einen richtigen Satz formulieren).
+Three Participants, Alice, bob and eve take part in this protocol. The Scheme is that alice prompts an text input from the user, Then passes this input arround in a circle through bob and eve. Both bob and eve perfom local modifications of the message in the spirit of the silent post game.
+
+\begin{lstlisting}[language=lean]
+def silent_post (ep:Location): Choreo ep Unit:= do
+  let input <- locally alice do
+    info "enter a message"
+    return <- readString
+
+  let msg: String @ bob <- input ~> bob
+  let msg <- locally bob do return [(⤉msg), "bob"]
+
+  let msg <- msg ~> eve
+  let msg <- locally eve do return (⤉msg).concat "eve"
+
+  let msg <- send_recv msg alice
+  locally alice do info s!"finished with string from eve: {msg}"
+\end{lstlisting}
+As the Type of a Choreo depends on the endpoint it is projected to, the silent_post function carries an endpoint as a argument. Also notice the \emph{@} notation, that is an abbreviation for an \emph{GVal} Type with implicit endpoint. This notation works inside a Choreo as the endpoint of GVal's resulting from a communication or local operation is allways the endpoint the choreography is parameterized with.
+As discussed in --TODO-- the locally functions lets uns define a Freer-Monad with all locally available effects. For Silent post, those local Effect Signatures are defined as
+\begin{lstlisting}[language=lean]
+instance sig: LocSig Location where
+  sig x := match x with
+    | alice =>  CmdInputEff ⨳ LogEff
+    | bob =>  LogEff
+    | eve => LogEff
+\end{lstlisting}
+such that every location is allowed to perform a logging effect \emph{LogEff} and additionally alice has access to CmdInputEff, which allow to prompt a String from a User in the command line.
+
+
+\subsection{book seller}
+\label{ss:book}
+
+\begin{lstlisting}[language=lean]
+def book_seller (negotiate: negT buyer ep)
+  : Choreo ep (Option (String @ buyer # ep)) := do
+
+  let budget <- locally buyer do get_budget
+  let title <- locally buyer do get_title
+
+  let title' <- (title ~> seller)
+  let price <- locally seller do lookup_price (⤉title')
+  let price <- price ~> buyer
+
+  locally seller do info s!"got book title: {⤉title'}"
+
+  locally buyer do info s!"the price is {⤉price}, negotiate with friend"
+
+  let d <- negotiate budget price -- calls another choreo :)
+
+  branch d fun
+  | true => do
+    let date <- locally seller do deliveryDate
+    let date <- date ~> buyer
+    return some date
+  | false => do
+    locally seller do warning s!"the customer declined the purchase"
+    locally buyer do error s!"{⤉title} has a price of {⤉price} exceeding your budget of {⤉budget}!"
+    return none
+
+\end{lstlisting}
+
+\subsection{sso authentication}
+\label{ss:sso}
+
+\begin{lstlisting}[language=lean]
+def silent_post (ep:Location): Choreo ep Unit:= do
+  let input <- locally alice do
+    info "enter a message"
+    return <- readString
+
+  let msg: String @ bob <- input ~> bob
+  let msg <- locally bob do return [(⤉msg), "bob"]
+
+  let msg <- msg ~> eve
+  let msg <- locally eve do return (⤉msg).concat "eve"
+
+  let msg <- send_recv msg alice
+  locally alice do info s!"finished with string from eve: {msg}"
+\end{lstlisting}
+
+\subsection{mergesort}
+\label{ss:merge}
+
+\begin{lstlisting}[language=lean]
+def silent_post (ep:Location): Choreo ep Unit:= do
+  let input <- locally alice do
+    info "enter a message"
+    return <- readString
+
+  let msg: String @ bob <- input ~> bob
+  let msg <- locally bob do return [(⤉msg), "bob"]
+
+  let msg <- msg ~> eve
+  let msg <- locally eve do return (⤉msg).concat "eve"
+
+  let msg <- send_recv msg alice
+  locally alice do info s!"finished with string from eve: {msg}"
 \end{lstlisting}

@@ -8,8 +8,6 @@ inductive Freer (Eff:Type u → Type v) (α:Type w) where
 | Do: Eff β → (β → Freer Eff α) → Freer Eff α
 | Return: α → Freer Eff α
 
-
-
 def Freer.lift  {m: Type → Type} [Monad m] [MonadLift eff m]: Freer eff α → m α
 | .Return v => return v
 | .Do e cont => do

@@ -115,11 +115,9 @@ def book_seller (negotiate: negT  (l1:=buyer) (ep:=ep))
   let price <- locally seller do SellerEff.lookup_price (⤉title')
   let price <- price ~> buyer
 
-  let _ <- locally seller do
-    LogEff.info s!"got book title: {⤉title'}"
+  locally seller do info s!"got book title: {⤉title'}"
 
-   let _ <- locally buyer do
-    LogEff.info s!"the price is {⤉price}, negotiate with friend"
+  locally buyer do info s!"the price is {⤉price}, negotiate with friend"
 
   let d <- negotiate budget price -- calls another choreo :)
 
@@ -129,12 +127,8 @@ def book_seller (negotiate: negT  (l1:=buyer) (ep:=ep))
     let date <- date ~> buyer
     return some date
   | false => do
-    let _ <- locally seller do
-      warning s!"the customer declined the purchase"
-
-    let _ <- locally buyer do
-      error s!"{⤉title} has a price of {⤉price} exceeding your budget of {⤉budget}!"
-
+    locally seller do warning s!"the customer declined the purchase"
+    locally buyer do error s!"{⤉title} has a price of {⤉price} exceeding your budget of {⤉budget}!"
     return none
 
 

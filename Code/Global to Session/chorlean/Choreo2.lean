@@ -178,7 +178,7 @@ def send_recv {s:δ} (gv: GVal s ep μ) (r: δ)  [LocSig δ]:=
   toChoreo (ChorEff.Send_recv gv r )
 
 def locally  [LocSig δ] (loc: δ)  (comp: [∀ x, Unpack loc ep x] -> Freer (LocSig.sig loc) α):=
-  toChoreo (ChorEff.Local loc comp) (a:=GVal loc ep α)
+  toChoreo (ChorEff.Local loc comp) (a:= α @ loc # ep)
 
 def branch {decider:δ} [LocSig δ] (gv: GVal decider ep μ) (cont: μ -> Choreo ep α) [FinEnum δ] :=
     Choreo.Cond gv cont
