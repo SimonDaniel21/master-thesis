@@ -4,6 +4,8 @@ inductive LogEff: Type -> Type 1
 | warning: String -> LogEff Unit
 | info: String -> LogEff Unit
 | error: String -> LogEff Unit
+deriving Repr
+
 
 instance: MonadLift (LogEff) IO where
   monadLift m := match m with

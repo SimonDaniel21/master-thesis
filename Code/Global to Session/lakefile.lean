@@ -95,6 +95,11 @@ lean_exe auth where
   moreLeancArgs := #["-fPIC"]
   supportInterpreter := true
 
+lean_exe auth2 where
+  root := `chorlean.examples.sso_auth2
+  moreLeancArgs := #["-fPIC"]
+  supportInterpreter := true
+
 lean_exe merge where
   root := `chorlean.examples.mergesort
   moreLeancArgs := #["-fPIC"]

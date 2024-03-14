@@ -132,6 +132,9 @@ def book_seller (negotiate: negT  (l1:=buyer) (ep:=ep))
     return none
 
 
+--instance (ep:Location): MonadLiftT (Choreo ep) IO := EPP ep
+
+
 def main (args : List String): IO Unit := do
   let mode := args.get! 0
 
@@ -141,19 +144,16 @@ def main (args : List String): IO Unit := do
     let ep := ep_opt.get h
 
     --let net <-  init_network ep
-
-    have:= NetEPP ep
-    have := (sig.executable ep)
-    let e := EPP ep
+    let _epp := EPP ep
 
     IO.println (s!"starting bookseller 50 50")
 
     have: MonadLiftT (FriendEff) (FriendEff ⨳ LogEff) := inferInstance
 
-    let res <- e.monadLift (book_seller (split_50_50 buyer friend ep))
+    let _res <- (book_seller (split_50_50 buyer friend ep))
 
     IO.println (s!"\n\nstarting bookseller pay rest")
-    let res <- e.monadLift (book_seller (pay_rest buyer friend ep))
+    let res <- (book_seller (pay_rest buyer friend ep))
     return ()
   else
     IO.println s!"{mode} is no valid endpoint"

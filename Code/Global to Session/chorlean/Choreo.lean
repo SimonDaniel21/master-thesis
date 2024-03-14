@@ -280,6 +280,7 @@ macro_rules
 
 syntax "decision " ident term " else " term: term
 
+
 macro_rules
 | `(decision $i $t1 else $t2) => `(Choreo.Cond2 $i ($t1) ($t2))
 

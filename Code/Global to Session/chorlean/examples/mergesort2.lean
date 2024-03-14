@@ -116,20 +116,17 @@ def main (args : List String): IO Unit := do
     let ep := ep_opt.get h
 
     --let net <-  init_network ep
-
-    have:= NetEPP ep
-    have := (sig.executable ep)
-    let e := EPP ep
+    let epp := EPP ep
 
     IO.println (s!"starting bookseller 50 50")
     IO.println (s!"\n\nstarting bookseller pay rest")
 
 
-    --let data <- e.monadLift (locally Master do MasterEff.gen)
+    let data <- epp.monadLift (locally Master do MasterEff.gen)
     let data := GVal.wrap Master ep [1]
-    let temp := (sort n ep (FinEnum.toList (Location n)) (by sorry) data)
+    --let temp := (sort n ep (FinEnum.toList (Location n)) (by sorry) data)
 
-    let res := e.monadLift (sort n ep (FinEnum.toList (Location n)) (by sorry) sorry)
+    let res <- (sort n ep (FinEnum.toList (Location n)) (by sorry) sorry)
     return ()
   else
     IO.println s!"{mode} is no valid endpoint"

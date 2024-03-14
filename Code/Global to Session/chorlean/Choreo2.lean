@@ -17,61 +17,6 @@ variable {μ: Type} [Serialize μ]  -- mu wegen msg Type
 --   com {μ} [Serialize μ]: {s: δ} -> GVal s ep μ -> (r: δ) -> NetM (GVal r ep μ)
 
 
-structure SockChannel (sender receiver ep: δ ) where
-  recv_sock: GVal receiver ep Socket
-  send_sock: GVal sender ep Socket
-
-def init_sending_channel (sender ep:δ) (addr: Address):  IO (GVal sender ep Socket) := do
-  if h:(sender = ep) then
-    let sock <- addr.connect_to
-    return GVal.Wrap h sock
-  else
-    return GVal.Empty h
-
-def init_receiving_channel  (receiver ep: δ) (addr: Address):  IO (GVal receiver ep Socket) := do
-  if h:(receiver = ep) then
-    let sock <- addr.listen_on
-    return GVal.Wrap h sock
-  else
-    return GVal.Empty h
-
--- epp for initializing one network socket
-def init_channel [Repr δ] (sender receiver ep: δ) (addr: Address):  IO (SockChannel sender receiver ep) := do
-  if(dbg_print_init_sockets ∧ sender = ep) then
-    IO.println s!"connecting out {reprStr sender} -> {reprStr receiver}"
-  if(dbg_print_init_sockets ∧ receiver = ep) then
-    IO.println s!"connecting in  {reprStr sender} -> {reprStr receiver}"
-  let recv_sock <- init_receiving_channel receiver ep addr
-  let send_sock <- init_sending_channel sender ep addr
-  return ⟨recv_sock, send_sock⟩
-
-structure SockNet {δ:Type} [DecidableEq δ] (ep: δ) [DecidableEq δ] where
-  channels: List (Σ (id: δ×δ), SockChannel id.1 id.2 ep)
-  complete: ∀ (k : δ×δ), (k.1 ≠ k.2) -> (channels.dlookup k).isSome
-
-def SockNet.getChannel {δ:Type} [DecidableEq δ]  {ep: δ} (net:SockNet ep) (k:δ×δ) (not_self: k.1 ≠ k.2) : SockChannel k.1 k.2 ep :=
-  (net.channels.dlookup k).get (by simp [net.complete, not_self])
-
-def init_network [DecidableEq δ] [Repr δ] [FinEnum δ] (ep: δ) (as:  (k:δ×δ) -> Address := default_adress) : IO (SockNet ep) := do
-
-  let filtered := (FinEnum.toList (δ×δ)).filter (fun k => k.1 ≠ k.2)
-  let progs: List (Σ (k: (δ×δ)), Address)  := filtered.map (fun k => ⟨k, as k⟩ )
-  let channels_prog: IO (List (Σ (k: δ×δ), SockChannel k.1 k.2 ep)):= progs.mapM (fun x => do
-    let id := x.1
-    let chan: SockChannel id.1 id.2 ep <-  init_channel id.1 id.2 ep x.2
-    return ⟨id, chan⟩ )
-  let cs <- channels_prog
-
-  if(dbg_print_init_sockets) then
-    IO.println ""
-  return {
-            channels := cs
-            complete := fun k => by
-              simp [List.dlookup_isSome, List.keys]
-              sorry
-              done
-          }
-
 
 #check LocalM
 
@@ -105,7 +50,8 @@ instance {δ:Type} [DecidableEq δ]  [LocSig δ]{ep:δ}: Monad (Choreo (δ := δ
   bind  := Choreo.bind
 
 
-def com {s: δ} (gv:GVal s ep μ) (r: δ): NetM δ (GVal r ep μ) := do
+-- projects a communication operation to a NetM
+def com {s: δ} (gv:GVal s ep μ) (r: δ): NetM ep (GVal r ep μ) := do
    let s := gv.owner
     if h:( s = ep) then
       let v := gv.unwrap h
@@ -113,19 +59,19 @@ def com {s: δ} (gv:GVal s ep μ) (r: δ): NetM δ (GVal r ep μ) := do
         return GVal.Wrap h2 v
       else
         let v := gv.unwrap h
-        NetEff.send r v
+        NetEff.send r (h2) v
         return GVal.Empty h2
     else
       if h2:(r = ep) then
-        let v <- NetEff.recv s μ
+        let v <- NetEff.recv s h μ
         return GVal.Wrap h2 v
       else
         return GVal.Empty h2
 
+-- projects a broadcast operation to a NetM
+def broadcast [FinEnum δ] {s: δ} (gv:GVal s ep μ): NetM ep μ := do
 
-def broadcast [FinEnum δ] {s: δ} (gv:GVal s ep μ): NetM δ μ := do
-
-  let progs: List (Σ (r: δ), NetM δ (GVal r ep μ)) :=
+  let progs: List (Σ (r: δ), NetM ep (GVal r ep μ)) :=
     (FinEnum.toList δ).map (fun x => ⟨x, com gv x⟩)
 
   let mut gvs: List (Σ (r: δ), (GVal r ep μ)) := []
@@ -136,7 +82,9 @@ def broadcast [FinEnum δ] {s: δ} (gv:GVal s ep μ): NetM δ μ := do
 
   return GVal.reduce gvs (by sorry)
 
-def ChorEff.epp' (ep:δ) [LocSig δ] {α : Type}: ChorEff ep α → LocalM δ (LocSig.sig ep) α
+
+-- projects a ChorEff to a LocalM by adding the neccesarry NetEffects
+def ChorEff.epp' (ep:δ) [LocSig δ] {α : Type}: ChorEff ep α → LocalM ep (LocSig.sig ep) α
 | ChorEff.Send_recv gv r => com gv r
 | ChorEff.Local loc comp (α := α ) => do
   if h:( loc = ep) then
@@ -147,15 +95,12 @@ def ChorEff.epp' (ep:δ) [LocSig δ] {α : Type}: ChorEff ep α → LocalM δ (L
   else
     return  GVal.Empty h
 
+-- instance EPP2 (ep:δ) [LocSig δ]: MonadLiftT (ChorEff ep) (LocalM δ (LocSig.sig ep)) where
+--   monadLift := ChorEff.epp' ep
 
-instance EPP2 (ep:δ) [LocSig δ]: MonadLiftT (ChorEff ep) (LocalM δ (LocSig.sig ep)) where
-  monadLift := ChorEff.epp' ep
-
-
-
-def Choreo.epp' (ep:δ) [LocSig δ] {α : Type}: Choreo ep α → LocalM δ (LocSig.sig ep) α
+-- projects a Choreo to a LocalM by broadcasting choices and projecting the Choreffects
+def Choreo.epp' (ep:δ) [LocSig δ] {α : Type}: Choreo ep α → LocalM ep (LocSig.sig ep) α
  | Choreo.Cond gv cont => do
-
     let choice <- broadcast gv
     Choreo.epp' ep (cont choice)
   | Choreo.Return v => return v
@@ -165,9 +110,19 @@ def Choreo.epp' (ep:δ) [LocSig δ] {α : Type}: Choreo ep α → LocalM δ (Loc
     Choreo.epp' ep (cont res)
 
 
-
-instance EPP (ep:δ) [LocSig δ]: MonadLiftT (Choreo ep) (LocalM δ (LocSig.sig ep)) where
+-- Lifts a Choreo into the localM Program with the endpoint signature.
+-- to be liftable into IO however a Lift instance for NetEff needs to be provided aswell
+instance ChoreoEPP (ep:δ) [LocSig δ]: MonadLiftT (Choreo ep) (LocalM ep (LocSig.sig ep)) where
   monadLift := Choreo.epp' ep
+
+--(as: δ × δ -> Address := default_adress)
+instance EPP  [FinEnum δ] [Repr δ] [LocSig δ]
+  (ep:δ) (net: SockNet ep) : MonadLiftT (Choreo ep) IO where
+  monadLift x :=
+    let _netlift := NetEPP2 ep net
+    let _ep_io_lift := LocSig.executable ep
+    ((Choreo.epp' ep) x)
+
 
 notation:55 "⤉" gv => (Unpack.unpack gv)
 
@@ -190,3 +145,20 @@ notation:55 lv "~>" receiver => send_recv lv receiver
 -- lets you omit variable assignement with let in do notation for Unit Choreos
 instance: CoeOut (GVal o ep Unit) Unit where
   coe _ := ()
+
+
+
+-- def runChoreo {δ:Type} {α:Type} [FinEnum δ] [LocSig δ] [Repr δ] (s: String) (chor: (ep:δ) ->  Choreo ep α): (IO (Option α))  := do
+
+--     let ep_opt: Option δ := FinEnum.ofString? s
+
+--     if h: (ep_opt.isSome) then
+
+--       let ep := ep_opt.get h
+--       let _epp := EPP ep
+
+--       let r <- (chor ep)
+--       return r
+--     else
+--       IO.println s!"{s} is no valid endpoint"
+--       return none

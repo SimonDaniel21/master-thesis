@@ -70,7 +70,7 @@ def book_seller (ep: Location): Choreo ep (Option (GVal buyer ep String)):= do
   let budget <- locally buyer get_budget
   let title <- locally buyer get_title
 
-  let title': GVal seller ep String <- title ~> seller
+  let title': String @ seller <- title ~> seller
 
 
   let price <- locally seller (MonadLiftT.monadLift (lookup_price (⤉ title')))
@@ -78,8 +78,7 @@ def book_seller (ep: Location): Choreo ep (Option (GVal buyer ep String)):= do
   --let _ <-locally seller ((LogEff.info ("")))
   let price <- price ~> buyer
 
-
-  let d: GVal  buyer ep Bool <- locally buyer do return ((⤉budget) >= (⤉price))
+  let d: Bool @ buyer <- locally buyer do return ((⤉budget) >= (⤉price))
 
   let _ <- locally buyer (
     print2 s!"budget {⤉budget} -- {⤉price}")
@@ -100,7 +99,6 @@ def book_seller (ep: Location): Choreo ep (Option (GVal buyer ep String)):= do
      return none
 
 
-
 def main (args : List String): IO Unit := do
   let mode := args.get! 0
 
@@ -108,16 +106,10 @@ def main (args : List String): IO Unit := do
 
   if h: (ep_opt.isSome) then
     let ep := ep_opt.get h
+    let net <- init_network ep
+    let epp := EPP ep net
 
-    --let net <-  init_network ep
-
-    have:= NetEPP ep
-    have := (sig.executable ep)
-    let e := EPP ep
-
-    let test := e.monadLift  (book_seller ep)
-
-    let r <- test
+    let r <- (book_seller ep)
     return ()
   else
     IO.println s!"{mode} is no valid endpoint"
