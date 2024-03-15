@@ -1,69 +1,117 @@
-import chorlean.Choreo_nomut
+import chorlean.Choreo
 
 -- example from: Choral: Object-Oriented Choreographic Programming
 -- 3.1 Distributed authentication
 
-def sso_cfg := gen_cfg
-  [
-    (("client", "IP"), sym),
-    (("service", "IP"), sym)
-  ]
+
+inductive Location
+| client | service | IP
+deriving Repr, Fintype
+
+instance : FinEnum Location :=
+  FinEnum.ofEquiv _ (proxy_equiv% Location).symm
+
+open Location
+
+
+
+inductive IPEff: Type -> Type 1
+| createToken: IPEff String
+| check_hash: String -> IPEff Bool
+
+instance: MonadLift IPEff IO where
+  monadLift x := match x with
+    | .createToken => return "valid token"
+    | .check_hash s => CmdInputEff.readBool (.some "is the hash [{s}] correct? (apply db lookup here)")
+
 
 structure Credentials where
   username: String
   password: String
 
+inductive ClientEff: Type -> Type 1
+| prompt_credentias: ClientEff Credentials
 
-def createToken: local_prog String "IP"
-| _ => do
-  return "valid token"
 
-def calcHash (salt: String @"client") (pwd: String @"client"): local_prog String "client"
-| un => do
-  return ((un salt) ++ (un pwd)).dropRight 1
+instance: MonadLiftT ClientEff IO where
+  monadLift x := match x with
+    | .prompt_credentias => do
+      let username <- CmdInputEff.readString ("enter your username")
+      let password <- CmdInputEff.readString ("enter your password")
+      return {username, password}
+
+-- instance: MonadLiftT ClientEff (Freer CmdInputEff) where
+--   monadLift x := match x with
+--     | .prompt_credentias => do
+--       let username <- CmdInputEff.readString ("enter your username")
+--       let password <- CmdInputEff.readString ("enter your password")
+--       return {username, password}
+
+instance sig: LocSig Location where
+  sig x := match x with
+    | client =>  ClientEff ⨳ LogEff
+    | service =>  LogEff
+    | IP => IPEff ⨳ LogEff
+  executable x := match x with
+    | client =>  inferInstance
+    | service =>  inferInstance
+    | IP => inferInstance
+
+
+def calcHash (salt: String) (pwd: String): String := (salt ++ pwd).dropRight 1
 
 def add_salt (s:String): String := "salty " ++ s
 
+open LogEff
+open IPEff
 
-def authenticate (creds: Credentials @ "client"): Choreo (Option ((String @"client") × (String @"service"))):= do
-  let pw <- compute "client" fun un => (un creds).password
-  let _ <- locally "service" fun _ => do
-    IO.println "hello service"
-  let username <- locally "client" fun un => return (un creds).username
-  let username' <- username ~> "IP"
-  let salt <- locally "IP" fun un => return add_salt (un username')
-  let salt <- salt ~> "client"
-  let hash <- locally "client" (calcHash salt pw)
-  let hash <- hash ~> "IP"
-  let valid <- locally "IP" fun un => do
-    IO.println s!"is the following hash correct? (y/n)\n{un hash}"
-    return <- IO.getBool
+def authenticate (ep:Location) (creds: Credentials @ client # ep):
+  Choreo ep (Option ((String @ client # ep) × (String @ service # ep))):= do
+
+
+  have: MonadLift IPEff (IPEff ⨳ LogEff) := inferInstance
+
+
+  let pw <- locally client do return (⤉creds).password
+  locally service do info "hello service"
+  let username <- locally client do return (⤉creds).username
+  let username' <- username ~> IP
+  let salt <- locally IP do return add_salt (⤉username')
+  let salt <- salt ~> client
+  let hash <- locally client do return (calcHash (⤉salt) (⤉pw))
+  let hash <- hash ~> IP
+  let valid <- locally IP do check_hash (⤉hash)
+
   branch valid fun
   | true => do
-    let token <- locally "IP" createToken
-    let token_c <- token ~> "client"
-    let token_s <- token ~> "service"
+    let token <- locally IP do IPEff.createToken
+    let token_c <- token ~> client
+    let token_s <- token ~> service
     return (token_c, token_s)
   | false =>
     return none
 
 
-def sso_auth: Choreo (Option ((String @"client") × (String @"service"))):= do
-  let creds: Credentials @ "client" <- locally "client" fun _ => do
-    IO.println "enter your username"
-    let username <- IO.getLine
-    IO.println "enter your password"
-    let password <- IO.getLine
-    return {username, password}
+def sso_auth (ep: Location): Choreo ep (Option ((String @ client # ep) × (String @ service # ep))):= do
 
-  authenticate creds
+  have: MonadLift ClientEff (ClientEff ⨳ LogEff) := inferInstance
 
-def main (args : List String): IO UInt32 := do
+  let creds: Credentials @ client <- locally client do ClientEff.prompt_credentias
+  authenticate ep creds
+
+def main (args : List String): IO Unit := do
   let mode := args.get! 0
-  let net <- init_network sso_cfg mode
-  IO.println (s!"starting sso exmample")
-  let res <- ((sso_auth).epp mode).run mode net
+  let ep_opt := FinEnum.ofString? mode
 
-  IO.println s!"res: {res}"
+  if h: (ep_opt.isSome) then
+    let ep := ep_opt.get h
+    let net <- init_network ep
+    let epp := EPP ep net
 
-  return 0
+
+
+    let r <- (sso_auth ep)
+    return ()
+  else
+    IO.println s!"{mode} is no valid endpoint"
+    return ()

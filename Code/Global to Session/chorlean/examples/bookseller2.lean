@@ -1,126 +1,159 @@
 import chorlean.Choreo
+import chorlean.Effects
+
+
+class ExecutableLocation (δ:Type) where
+  m : δ -> (Type u -> Type b)
 
 inductive Location
 | buyer | seller | friend
-deriving Repr
+deriving Repr, Fintype
 
 instance : FinEnum Location :=
   FinEnum.ofEquiv _ (proxy_equiv% Location).symm
 
 open Location
 
-def negT2  {l1 ep:δ}:=  GVal l1 ep Nat -> GVal l1 ep Nat -> Choreo ep (Bool @ l1 # ep)
+inductive BuyerEff: Type -> Type 1
+| get_budget: BuyerEff Nat
+| get_title: BuyerEff String
 
---def negT {endpoint: String} := GVal Nat "buyer" endpoint -> Nat @ "buyer" -> Choreo (GVal Bool "buyer" endpoint)
-
-def book_price: String -> Nat
-| "hello" => 400
-| "Faust" => 100
-| _ => 200
+inductive FriendEff: Type -> Type 1
+| credit_decision: Nat -> FriendEff Bool
 
 
-def split_50_50 (borrower lender ep: Location) (j:borrower != lender :=by decide) (j2: lender != borrower :=by decide): negT2 (l1:=borrower) (ep:= ep) := fun budget price => do
+instance: MonadLift (FriendEff) CmdInputEff where
+  monadLift m := match m with
+    | .credit_decision share =>
+      CmdInputEff.readBool (.some s!"the buyer wants you to pay a share of {share} for his book.\nDo you accept?")
+
+open BuyerEff
+
+instance: MonadLiftT (BuyerEff) CmdInputEff where
+  monadLift m := match m with
+    | .get_budget => CmdInputEff.readNat (.some "enter your budget")
+    | .get_title => CmdInputEff.readString (.some "enter your title")
 
 
-  let share <- compute borrower ((⤉price) / 2)
+inductive SellerEff: Type -> Type 1
+| lookup_price: String -> SellerEff Nat
+| deliveryDate:  SellerEff String
+open SellerEff
 
-  let exceeds_budget: Bool @ borrower <- compute borrower ((⤉budget) < (⤉share))
+instance si: MonadLift (SellerEff) IO where
+  monadLift m := match m with
+    | .lookup_price title => do
+      IO.println "looked up title"
+      return  (if (title) == "Faust" then 100 else 200)
+    | .deliveryDate => do
+      IO.println "enter the delivery date:"
+      return (<-IO.getLine)
 
-  branch exceeds_budget fun
-  | true =>
-    return GVal.wrap borrower ep false
-  | false => do
-    let share <- send_recv share lender
-    let accepts <- locally lender do
-      IO.println s!"the buyer wants you to pay a share of {⤉share} for his book.\nDo you accept?(y/n):"
-      let str <- IO.getLine
-      return str == "y"
-
-    send accepts to borrower
-    return accepts
+instance sig: LocSig Location where
+  sig x := match x with
+    | buyer =>  BuyerEff ⨳ LogEff
+    | seller =>  SellerEff ⨳ LogEff
+    | friend => FriendEff ⨳ LogEff
+  executable x := match x with
+    | buyer => inferInstance
+    | seller => inferInstance
+    | friend => inferInstance
 
 
+open LogEff
 
-def pay_rest (borrower lender ep: Location) : negT2 (l1:=borrower) (ep:= ep) := fun budget price => do
+-- Type of Negotiation Choreo where l1 is the Location of the borrower
+def negT  {l1 ep:Location}:=  GVal l1 ep Nat -> GVal l1 ep Nat -> Choreo ep (Bool @ l1 # ep)
 
-  let missing <- compute borrower ((⤉price) - (⤉budget))
+
+-- b - borrower - l - lender
+def split_50_50 (b l ep: Location) [MonadLiftT FriendEff (sig.sig l)]: negT (l1:=b) (ep:= ep) :=
+  fun budget price => do
+    let share <- locally b do return ((⤉price) / 2)
+    let exceeds_budget: Bool @ b <- locally b do return ((⤉budget) < (⤉share))
+
+    branch exceeds_budget fun
+    | true =>
+      return GVal.wrap b ep false
+    | false => do
+      let share <- send_recv share l
+      let accepts <- locally l do FriendEff.credit_decision (⤉share)
+      let accepts <- accepts ~> b
+      return accepts
+
+
+def pay_rest (b l ep: Location) [MonadLiftT FriendEff (sig.sig l)]: negT (l1:=b) (ep:= ep) := fun budget price => do
+
+  let missing <- locally b do return ((⤉price) - (⤉budget))
 
   branch missing fun
   | 0 => do
-    return GVal.wrap borrower ep true
+    return GVal.wrap b ep true
   | x => do
-    let accepts <- locally lender do
-      IO.println s!"the buyer wants you to pay a share of {x} for his book.\nDo you accept?(y/n):"
-      let str <- IO.getLine
-      return str == "y"
+    let accepts <- locally l do FriendEff.credit_decision (x)
 
-    send accepts to borrower
+    let accepts <- accepts ~> b
     return accepts
 
 
+def book_seller (negotiate: negT  (l1:=buyer) (ep:=ep))
+  : Choreo ep (Option (String @ buyer # ep)) := do
 
-def book_seller (negotiate: negT2  (l1:=buyer) (ep:=ep))
-  : Choreo ep (Option (String @ buyer # ep)):= do
+  have: MonadLiftT BuyerEff  (BuyerEff ⨳ LogEff) := inferInstance
+  have: MonadLiftT LogEff (BuyerEff ⨳ LogEff) := inferInstance
 
-  let title <- locally buyer do
-    IO.println "enter a book title:"
-    return <- IO.getLine
+  have: MonadLiftT (FriendEff) (FriendEff ⨳ LogEff) := inferInstance
+  have: MonadLiftT (LogEff)  (FriendEff ⨳ LogEff):= inferInstance
+
+  have: MonadLiftT (SellerEff) (SellerEff ⨳ LogEff) := inferInstance
+  have: MonadLiftT (LogEff) (SellerEff ⨳ LogEff) := inferInstance
+
+  let budget <- locally buyer do BuyerEff.get_budget
+  let title <- locally buyer do BuyerEff.get_title
 
   let title' <- (title ~> seller)
-  let price <- compute seller (book_price (⤉title'))
+  let price <- locally seller do SellerEff.lookup_price (⤉title')
   let price <- price ~> buyer
 
-  let _ <- locally seller do
-    IO.println s!"got book title: {⤉title'}"
+  locally seller do info s!"got book title: {⤉title'}"
 
-   let _ <- locally buyer do
-    IO.println s!"the price is {⤉price}, negotiate with friend"
+  locally buyer do info s!"the price is {⤉price}, negotiate with friend"
 
-  let d <- negotiate (GVal.wrap buyer ep 150) price -- calls another choreo :)
+  let d <- negotiate budget price -- calls another choreo :)
 
-  -- have (x:Type) (loc:String) : Coe (Choreo endpoint (GVal x loc endpoint)) (GVal x loc endpoint) := ⟨fun chor =>
-  --   chor.bind⟩
   branch d fun
   | true => do
-    let date <- locally seller do
-      IO.println "enter the delivery date:"
-      return <- IO.getLine
-
+    let date <- locally seller do SellerEff.deliveryDate
     let date <- date ~> buyer
     return some date
   | false => do
-
-    let _ <- locally seller do
-      IO.println s!"the customer declined the purchase"
-
-    let _ <- locally buyer do
-      IO.println s!"{⤉title} has a price of {⤉price} exceeding your budget of {150}!"
-
+    locally seller do warning s!"the customer declined the purchase"
+    locally buyer do error s!"{⤉title} has a price of {⤉price} exceeding your budget of {⤉budget}!"
     return none
 
 
-def someCalc (v: Nat ⊕ UInt8): Nat := match v with
-| .inl n => n+1
-| .inr ui => ui.toNat +1
+--instance (ep:Location): MonadLiftT (Choreo ep) IO := EPP ep
 
-#eval someCalc (.inl 3)
 
 def main (args : List String): IO Unit := do
   let mode := args.get! 0
+
   let ep_opt := FinEnum.ofString? mode
+
   if h: (ep_opt.isSome) then
     let ep := ep_opt.get h
 
-    let net <-  init_network ep default_adress
-
-    have: Network ep := net.toNet
+    let net <-  init_network ep
+    let _epp := EPP ep net
 
     IO.println (s!"starting bookseller 50 50")
-    let res <- ((book_seller (split_50_50 buyer friend ep)).epp)
+
+    have: MonadLiftT (FriendEff) (FriendEff ⨳ LogEff) := inferInstance
+
+    let _res <- (book_seller (split_50_50 buyer friend ep))
 
     IO.println (s!"\n\nstarting bookseller pay rest")
-    let res <- ((book_seller (pay_rest buyer friend ep)).epp)
-
+    let res <- (book_seller (pay_rest buyer friend ep))
     return ()
   else
     IO.println s!"{mode} is no valid endpoint"

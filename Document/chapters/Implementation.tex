@@ -37,7 +37,7 @@ v sind Variablennamen (Strings) und l Location Namen (Strings)
 
 \section{Networking in Lean4}
 Lean4's standard Library provides IO operations for exchanging values between multiple Threads. While this would suffice to test the functionality of running Choreographies on a single machine, it is much more desirable to be able to split the Choreography into actual seperate programs that may run on different machines. To accomplish this I decided to implement message exchanging by Sockets.
-While some PLs like Java provide a Language embedded implementation of Sockets, or other well established Languages like Haskell provide mature Librarays for a Socket API, Lean has a much younger ecosystem that seems less feature rich. The Solution i chose is the relatively young Lean4 library 'sockets for Lean 4' by Henrik Böving (TODO in Quellen reinpacken) which is hosted at https://github.com/hargoniX/socket.lean under the MIT License. It servers as a wrapper around the platform specific 'winsock.h' Windows, and the 'sys/socket.h' Unix C-librarys while providing a clean Lean interface.
+While some PLs like Java provide a Language embedded implementation of Sockets, or other well established Languages like Haskell provide mature Librarays for a Socket API, Lean has a much younger ecosystem that seems less feature rich. The Solution i chose is the relatively new Lean4 library 'sockets for Lean 4' by Henrik Böving (TODO in Quellen reinpacken) which is hosted at https://github.com/hargoniX/socket.lean under the MIT License. It servers as a wrapper around the platform specific 'winsock.h' Windows, and the 'sys/socket.h' Unix C-librarys while providing a native Lean interface. At the time of working on this thesis the \emph{Sockets} did not work with the, at that time, newest Version of Lean 4.6.0. Thanks to them they updated an underlying library (https://github.com/tydeu/lean4-alloy) and accepted my Merge Request with the version bump \cite{test}.
 \par
 To abstract away the Socket setup code in my local programs i decided to reopen a new socket for every communication operation in the Choreography for simplicity
 
@@ -54,11 +54,30 @@ similiarly to the sock.connect operation, the 'receive' function will bind an li
 \newline
 Serialize is a simple TypeClass that provides the following two functions:
 \begin{lstlisting}[language=lean]
-class Serialize (a: Type) extends ToString a where
-  to_bytes: a -> ByteArray
-  from_bytes: ByteArray -> Except String a
+class Serialize (μ: Type) μ where
+  to_bytes: μ -> ByteArray
+  from_bytes: ByteArray -> Except String μ
 \end{lstlisting}
-By implementing this TypeClass a Type can converted to, and from a ByteArray, enabling it to be sent over the network.
+By implementing the Serialize class, a Type can converted to, and from a ByteArray, enabling it to be sent over the network. Note that from_bytes is a partial function that may not return a conversion of that type. Not every ByteArray must be convertible into a type. A ByteArray created by the to_bytes function however should always be able to convert back into the initial value by the from_bytes function. Lean lets you add this condition as an additional class Field like
+\begin{lstlisting}[language=lean]
+ correct: ∀ (v: μ), (from_bytes (to_bytes v)) = v
+\end{lstlisting}
+(with an addtional assumption that from_bytes is no Exception). I omitted this proof in my implementation since writing such rigorous proofs for Serialize instances like Lists would be out of scope of this thesis, as im not trying to implement a perfect Serialization Framework for Lean.
+
+\subsection{Network Effects}
+
+\begin{lstlisting}[language=lean]
+inductive NetEff (ep: δ): Type -> Type 1
+| send {μ: Type} [Serialize μ] : (r:δ) -> (r ≠ ep) -> μ -> NetEff ep Unit
+| recv : (r:δ) -> (r ≠ ep) ->  (μ: Type) -> [Serialize μ] -> NetEff ep μ
+\end{lstlisting}
+\subsection{Persitant Connections}
+
+\begin{lstlisting}[language=lean]
+structure SockChannel (sender receiver ep: δ ) where
+  recv_sock: GVal receiver ep Socket
+  send_sock: GVal sender ep Socket
+\end{lstlisting}
 
 \section{Distributed Values}
 When computing with values in a global choreographic description it is crucial to differtiate between ``normal'' and distributed values. Since the choreography projects to different executable programs, distributed values can only live at a single location at a time. The authors of HasChor used Language extensions to integrate the location of a value into the type system. This is important to statically distinguish between a Value that lives on a location l1 and a value on l2 where l1 != l2.
@@ -170,19 +189,31 @@ def book_seller (negotiate: negT buyer ep)
 \label{ss:sso}
 
 \begin{lstlisting}[language=lean]
-def silent_post (ep:Location): Choreo ep Unit:= do
-  let input <- locally alice do
-    info "enter a message"
-    return <- readString
+structure Credentials where
+  username: String
+  password: String
 
-  let msg: String @ bob <- input ~> bob
-  let msg <- locally bob do return [(⤉msg), "bob"]
+def authenticate (ep:Location) (creds: Credentials @ client # ep):
+  Choreo ep (Option ((String @ client # ep) × (String @ service # ep))):= do
 
-  let msg <- msg ~> eve
-  let msg <- locally eve do return (⤉msg).concat "eve"
+  let pw <- locally client do return (⤉creds).password
+  locally service do info "hello service"
+  let username <- locally client do return (⤉creds).username
+  let username' <- username ~> IP
+  let salt <- locally IP do return add_salt (⤉username')
+  let salt <- salt ~> client
+  let hash <- locally client do return (calcHash (⤉salt) (⤉pw))
+  let hash <- hash ~> IP
+  let valid <- locally IP do check_hash (⤉hash)
 
-  let msg <- send_recv msg alice
-  locally alice do info s!"finished with string from eve: {msg}"
+  branch valid fun
+  | true => do
+    let token <- locally IP do IPEff.createToken
+    let token_c <- token ~> client
+    let token_s <- token ~> service
+    return (token_c, token_s)
+  | false =>
+    return none
 \end{lstlisting}
 
 \subsection{mergesort}

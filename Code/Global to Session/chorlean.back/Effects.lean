@@ -1,4 +1,4 @@
-import chorlean.utils
+import Test.my_utils
 
 inductive LogEff: Type -> Type 1
 | warning: String -> LogEff Unit

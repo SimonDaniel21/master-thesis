@@ -1,6 +1,6 @@
 import chorlean.Freer
 import chorlean.GVal
-import chorlean.utils
+import Test.my_utils
 
 #check ReaderT
 
@@ -83,10 +83,10 @@ def init_network [DecidableEq δ] [Repr δ] [FinEnum δ] (ep: δ) (as:  (k:δ×�
           }
 
 
-instance NetEPP [FinEnum δ] [Repr δ] (ep: δ) (net: SockNet ep): MonadLiftT (NetEff ep) IO where
+instance NetEPP2 [FinEnum δ] [Repr δ] (ep: δ) (net: SockNet ep): MonadLiftT (NetEff ep) IO where
   monadLift x := match x with
   | NetEff.send r p m=> do
-    let c := net.getChannel ⟨ ep, r⟩ (by sorry)  -- very simple proof
+    let c := net.getChannel ⟨ ep, r⟩ (by sorry)  -- very simple prrof
 
     let sock := c.send_sock.unwrap (by simp)
     IO.println s!"{reprName ep} --> {reprName r} --> {Serialize.pretty m}"
@@ -100,6 +100,24 @@ instance NetEPP [FinEnum δ] [Repr δ] (ep: δ) (net: SockNet ep): MonadLiftT (N
     return res
 
 
+
+
+-- instance NetEPP {δ:Type} (ep: δ) [FinEnum δ] [Repr δ] (as: δ × δ -> Address := default_adress): MonadLiftT (NetEff δ) IO where
+--   monadLift x := match x with
+--   | NetEff.send r m=> do
+--     IO.println s!"sent value to {reprName r} {Serialize.pretty m}"
+--     let sock <-  (as ⟨ep, r⟩ ).connect_to
+--     sock.send_val2 m
+--     sock.close
+
+--   | NetEff.recv s μ => do
+--     let sock <- (as ⟨s, ep⟩).listen_on
+--     let res <- sock.recv_val2
+--     sock.close
+--     IO.println s!"recv value from {reprName s} {Serialize.pretty res}"
+--     return res
+
+-- Freer Monad over the NetEffOld Signature
 @[reducible] def NetM {δ:Type} (ep:δ) := Freer (NetEff ep)
 
 
@@ -120,3 +138,37 @@ inductive IOEff: Type -> Type 1
 instance IOeffLift: MonadLift (IOEff) IO where
   monadLift x := match x with
   | IOEff.io e => e
+
+-- class Network {δ:Type} (ep: δ) where
+--   com {μ} [Serialize μ]: {s: δ} -> GVal s ep μ -> (r: δ) -> NetM δ (GVal r ep μ)
+
+-- class Network2 {δ:Type} (ep: δ) where
+--   com {μ} [Serialize μ]: {s: δ} -> GVal s ep μ -> (r: δ) -> NetEff (GVal r ep μ)
+
+
+-- Lifts a Local effect into the LocalM Monad # note the T for transitiv
+
+
+-- instance : MonadLiftT (LocalProgramEff leff) (LocalM leff)  where
+--   monadLift x := match x with
+--   | .local_eff le => MonadLiftT.monadLift le
+--   | .net_eff ne => MonadLiftT.monadLift ne
+
+
+-- Lifts a Local effect into the LocalM Monad # note the T for transitiv
+-- instance : MonadLiftT (leff) (LocalM leff) where
+--   monadLift x := Effect.ToFreer (LocalProgramEff.local_eff x)
+
+--Lifts a NetEffOld into the LocalM Monad
+
+
+-- Lifts an LocalProgrameff into a Monad m if both, net and the loc effect can be lifted into the monad
+
+
+-- Lifts a NetM into any LocalM (should not be needed?)
+-- instance why: MonadLift (NetM) (LocalM eff) where
+--   monadLift x := match x with
+--     | .Do n cont => do
+--       let res <- n
+--       Freer.monadLift (cont res)
+--     | .Return v => return v

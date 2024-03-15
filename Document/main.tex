@@ -48,9 +48,10 @@
 ]{tudapub}
 
 % MEINE PACKETE
-\usepackage{syntax}
 
-% Meine Packete
+% to print fixure XYZ instead of fig. XYZ
+\usepackage{cleveref}
+
 \usepackage{syntax}
 \renewcommand{\syntleft}{}
 \renewcommand{\syntright}{}
@@ -86,8 +87,8 @@
 %Literaturverzeichnis
 %%%%%%%%%%%%%%%%%%%
 \usepackage{biblatex}   % Literaturverzeichnis
-\bibliography{DEMO-TUDaBibliography}
-
+\bibliography{literature.bib}
+%\addbibresource{literature}% Dateiname der .bib-dat
 
 %%%%%%%%%%%%%%%%%%%
 %Paketvorschläge Tabellen
@@ -123,8 +124,8 @@
 	author=Simon Daniel
 }
 
-\title{Distributed Programming -- Funny things in Lean with session Types}
-\subtitle{TODO Untertitel}
+\title{Lean Choreographies}
+\subtitle{Higher Order Functional Choreographies in Lean4}
 \author[S. Daniel]{Simon Daniel}%optionales Argument ist die Signatur,
 \birthplace{Worms}%Geburtsort, bei Dissertationen zwingend notwendig
 \reviewer{ 1. Prof. Dr.-Ing. Mira Mezini  \and 2. David Richter M.Sc.}%Gutachter
@@ -159,14 +160,13 @@
 %\affidavit[signature-image={\includegraphics[width=\width,height=1cm]{example-image}}, <hier können andere Optionen zusätzlich stehen>]
 
 \tableofcontents
-
+\cite{adaptive_omp}
 \input{chapters/abstract}
 \input{chapters/introduction}
 \input{chapters/background}
 \input{chapters/Implementation}
 \input{chapters/evaluation}
 \input{chapters/conclusion}
-
 \printbibliography
 
 \end{document}
