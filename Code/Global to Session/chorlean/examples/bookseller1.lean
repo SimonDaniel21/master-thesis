@@ -60,7 +60,6 @@ instance sig: LocSig Location where
 
 def book_seller (ep: Location): Choreo ep (Option (GVal buyer ep String)):= do
 
-
   have: MonadLift BuyerEff (BuyerEff ⨳ LogEff) := inferInstance
   have: MonadLift LogEff (BuyerEff ⨳ LogEff) := inferInstance
 
@@ -70,23 +69,18 @@ def book_seller (ep: Location): Choreo ep (Option (GVal buyer ep String)):= do
   let budget <- locally buyer get_budget
   let title <- locally buyer get_title
 
-  let title': String @ seller <- title ~> seller
+  let title' <- title ~> seller
 
-
-  let price <- locally seller (MonadLiftT.monadLift (lookup_price (⤉ title')))
-
-  --let _ <-locally seller ((LogEff.info ("")))
-  let price <- price ~> buyer
+  let price <- (lookup_price (⤉ title')) @ seller ~~> buyer
 
   let d: Bool @ buyer <- locally buyer do return ((⤉budget) >= (⤉price))
 
-  let _ <- locally buyer (
+  locally buyer (
     print2 s!"budget {⤉budget} -- {⤉price}")
 
   branch d fun
   | true => do
-    let date <- locally seller deliveryDate
-    let date <- date ~> buyer
+    let date <- deliveryDate @ seller ~~> buyer
     return some date
   | false => do
 

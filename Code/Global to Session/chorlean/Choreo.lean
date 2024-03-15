@@ -137,8 +137,17 @@ def locally  [LocSig δ] (loc: δ)  (comp: [∀ x, Unpack loc ep x] -> Freer (Lo
 def branch {decider:δ} [LocSig δ] (gv: GVal decider ep μ) (cont: μ -> Choreo ep α) [FinEnum δ] :=
     Choreo.Cond gv cont
 
+def send_recv_comp [LocSig δ] (s r: δ)  [Serialize μ] (comp: [∀ x, Unpack s ep x] -> Freer (LocSig.sig s) μ):=
+  do
+  let gv <- locally s comp
+  toChoreo (ChorEff.Send_recv gv r) (a:= GVal r ep μ)
+
 
 notation:55 lv "~>" receiver => send_recv lv receiver
+
+
+notation:55 comp "@" sender "~~>" receiver  => send_recv_comp sender receiver comp
+
 
 -- coerces GVal Unit types into Unit
 -- lets you omit variable assignement with let in do notation for Unit Choreos

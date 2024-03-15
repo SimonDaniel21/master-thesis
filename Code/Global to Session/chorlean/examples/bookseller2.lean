@@ -90,9 +90,8 @@ def pay_rest (b l ep: Location) [MonadLiftT FriendEff (sig.sig l)]: negT (l1:=b)
   | 0 => do
     return GVal.wrap b ep true
   | x => do
-    let accepts <- locally l do FriendEff.credit_decision (x)
 
-    let accepts <- accepts ~> b
+    let accepts <- (FriendEff.credit_decision x) @ l ~~> b
     return accepts
 
 
@@ -112,19 +111,15 @@ def book_seller (negotiate: negT  (l1:=buyer) (ep:=ep))
   let title <- locally buyer do BuyerEff.get_title
 
   let title' <- (title ~> seller)
-  let price <- locally seller do SellerEff.lookup_price (⤉title')
-  let price <- price ~> buyer
-
+  let price <- (lookup_price (⤉title')) @ seller ~~> buyer
   locally seller do info s!"got book title: {⤉title'}"
-
   locally buyer do info s!"the price is {⤉price}, negotiate with friend"
 
   let d <- negotiate budget price -- calls another choreo :)
 
   branch d fun
   | true => do
-    let date <- locally seller do SellerEff.deliveryDate
-    let date <- date ~> buyer
+    let date <- deliveryDate @ seller ~~> buyer
     return some date
   | false => do
     locally seller do warning s!"the customer declined the purchase"
