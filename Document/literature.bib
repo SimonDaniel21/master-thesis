@@ -32,7 +32,8 @@
 %%
 % !TeX program = lualatex
 %%
-
+%https://github.com/gshen42/HasChor
+%HasChor
 %Beispiel BibTeX-Datenbank für die Verwendung von biblatex und biber
 
 @article{haschor,
@@ -53,8 +54,14 @@ numpages = {25},
 keywords = {Choreographic programming, freer monads}
 }
 
-%https://github.com/gshen42/HasChor
-%HasChor
+@MISC{githubmathlib4,
+title={{ Lean community Webpage}},
+howpublished={\url{https://leanprover-community.github.io} [last visited 15.03.2024]}
+}
+@MISC{githubmathlib4,
+title={{ Mathlib4 github respository}},
+howpublished={\url{https://github.com/leanprover-community/mathlib4} [last visited 15.03.2024]}
+}
 
 @MISC{github_socket,
 author={Henrik Böving},
@@ -66,56 +73,44 @@ author={Simon Daniel},
 title={{Pull request - version bumb to lean4:v4.6.0-rc1}},
 howpublished={\url{https://github.com/hargoniX/socket.lean/pull/6} [last visited 15.03.2021]}
 }
-
-
-@inproceedings{adaptive_omp,
-	author = {Maheo, Aurele and Koliaï, Souad and Carribault, Patrick and Pérache, Marc and Jalby, William},
-	year = {2012},
-	month = {06},
-	pages = {254-257},
-	title = {Adaptive OpenMP for large NUMA nodes},
-	doi = {10.1007/978-3-642-30961-8_20}
+@MISC{github_lean4,
+author={Simon Daniel},
+title={{Pull request - version bumb to lean4:v4.6.0-rc1}},
+howpublished={\url{https://github.com/hargoniX/socket.lean/pull/6} [last visited 15.03.2021]}
 }
 
-
-@online{imrad,
-	title = {IMRAD},
-	url = {https://en.wikipedia.org/wiki/IMRAD},
-	organization = {Wikipedia},
-	urldate = {2018-12-20},
+@MISC{githublean4,
+author={Leonardo de Moura at Microsoft Research},
+title={{Lean 4 programming language and theorem prover}},
+howpublished={\url{https://github.com/leanprover/lean4} [last visited 15.03.2021]}
 }
 
-@online{scrguide,
-	title={KOMA-Script},
-	subtitle={Die Anleitung},
-	author={Kohm, Markus},
-	date={2019-01-14},
-	url={http://mirrors.ctan.org/macros/latex/contrib/koma-script/doc/scrguide.pdf},
-	urldate={2019-02-05}
-	}
-
-@online{leaflet,
-	title={The document class leaflet},
-	author={Niepraschk, Rolf and Schmidt, Walter and Gäßlein, Hubert},
-	date={2015-12-27},
-	urldate={2020-02-12},
-	url={http://mirrors.ctan.org/macros/latex/contrib/leaflet/leaflet-manual.pdf}
+@article{pirouette,
+author = {Hirsch, Andrew K. and Garg, Deepak},
+title = {Pirouette: higher-order typed functional choreographies},
+year = {2022},
+issue_date = {January 2022},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+volume = {6},
+number = {POPL},
+url = {https://doi.org/10.1145/3498684},
+doi = {10.1145/3498684},
+abstract = {We present Pirouette, a language for typed higher-order functional choreographic programming. Pirouette offers programmers the ability to write a centralized functional program and compile it via endpoint projection into programs for each node in a distributed system. Moreover, Pirouette is defined generically over a (local) language of messages, and lifts guarantees about the message type system to its own. Message type soundness also guarantees deadlock freedom. All of our results are verified in Coq.},
+journal = {Proc. ACM Program. Lang.},
+month = {jan},
+articleno = {23},
+numpages = {27},
+keywords = {Functional Programming, Concurrency, Choreographies}
 }
 
-@online{TUDaGuideline,
-	title={Das Bild der TU Darmstadt},
-	subtitle={Corporate Design Handbuch},
-	edition={3},
-	month={06},
-	year={2011},
-	url={https://www.intern.tu-darmstadt.de/media/medien_stabsstelle_km/services/medien_cd/das_bild_der_tu_darmstadt.pdf},
-	urldate={2020-05-01}
-}
-
-@online{tudapub,
-	title={TUDaPub – \LaTeX-Paper im Corporate Design der TU Darmstadt},
-	author={Marei Peischl},
-	date={2021-10-12},
-	url={http://mirrors.ctan.org/macros/latex/contrib/tuda-ci/doc/DEMO-TUDaPub.pdf},
-	urldate={2021-10-12}
+@inproceedings{gentle-introduction-multiparty-sessiontypes,
+  author = {Nobuko Yoshida and Lorenzo Gheri},
+  title = {{A Very Gentle Introduction to Multiparty Session Types}},
+  booktitle = {16th International Conference on Distributed Computing and Internet Technology},
+  series = {LNCS},
+  volume = {11969},
+  pages = {73--93},
+  publisher = {Springer},
+  year = 2020
 }

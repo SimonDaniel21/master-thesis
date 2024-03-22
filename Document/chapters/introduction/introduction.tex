@@ -1,0 +1,47 @@
+\chapter{Introduction}
+\label{ch:introduction}
+\section{research Questions}
+
+Can a Choreographic Language be implemented in Lean4 in a similiar way to Haskell/HasChor? To Answer this Question i implement a DSL describing choreographic Programs in Lean.
+\begin{itemize}
+  \item Implement Knowledge of Choice mechanism
+  \item Implement EPP Projection for Choreographic programs
+  \item Implement 4 projection functions (Skizze)
+  \item find a suitable computation model for choreos
+  \item is the Type of a end point projected program \emph{always} equivalent to the end point projected type of the program?
+\end{itemize}
+
+%
+% \subsection{challenges}
+% \begin{itemize}
+%   \item what changes when communication is unreliable (or just asychronous)? adapt my model in Lean accordingly to include failure
+%   \item how to verify Choreographys supplied at runtime? im not quite sure if this is even neccessary after EPP
+% \end{itemize}
+% \subsection{notes}
+% \begin{itemize}
+%   \item unreliable nodes might be interesing? fault-tolerant and asynchronous systems were not covered by HasChor paper ``and other functional Choreographic languages'' do nothing to adress these difficulties (also mentioned in Modular Compilation for Higher-Order Functional Choreographies).
+%   \item how can session times still yield safety guarantees in asynchronous and/or unreliable systems (Multiparty Asynchronous Session Types Honda.)
+%   \item make Choreographys without obvious EPP projectable (like in Now it Compiles!). Are there other interesting problems than knowledge of choice?
+%   \item might be interesting to look into runtime verification with session types. (havent red alot about this, more in the future work / outlook sections)
+% \end{itemize}
+
+\section{Main part, no sections in introduction i think}
+This Theses proposes a libraray to formalize Choreographies inside the functional programming language Lean4 \cite{github_lean4}. It follows a recent idea inspired by the 2023 published paper \"HasChor: Functional Choreographic Programming for All\" while appliing the concept in and more recent programming language and extending the original implementation.
+-- Outline
+This Thesis is structured as follows: \cref{ch:showcase} will illustrate how the libraray can be used by following a simple example program. Then \cref{ch:backround} will set the stage and explain neccessary information for \cref{ch:implementation} where i present excerpts of my implementation, talk about the design choices and compare it against exisiting implementations.
+In \cref{ch:evaluation} i talk about how well Choreographies integrate into the Lean programming language. I also present a few example programs to show the practical capabilities and compare them to ScalaLoci, Choral and Haschor.
+
+\chapter{Choreography Showcase}
+\label{ch:showcase}
+
+\input{chapters/introduction/buyerseller}
+
+Here you can see the same behaviour implemented in two different ways. \cref{lst:test} shows the combined program specification, \cref{ch:evaluation} and \cref{ch:evaluation} show the individual program for the specified endpoints.
+\par
+The protocol includes two participants. A buyer who wants to order a book and a bookseller. To make the decision wether the \emph{buyer} can afford the Book, he first sends it's title to the \emph{seller}. The \emph{seller} is able to lookup the Books price in his local Database by the title and commuinicates the value back to the \emph{buyer}. Next The buyer checks if his budget fits the book price. If it does he requests the book from the Seller who finally notifies the buyer about the delivery date which terminates the protocol. If the book is to expensive the protocol terminates right away with a None Option.
+This is a common Scenario to introduce Choreographys, for example \cite{pirouette} uses it, and \cite{gentle-introduction-multiparty-sessiontypes} uses the same protocol with different names.
+Local programs \cref{lst:test} are written in the \emph{LocalM} Monad. This is Monad takes a Location as an argument where the local program is beeing executed and lets you accumulate Side effects specific to that Location. Notice in line 3+4 %TODO%
+that get_budget and get_title are effects of the buyer location and lookup_price in line 3 is a effect of the seller location. Addionally every LocalM monad can contain send and receive effects. Sending a Value takes a destination Location and a value to send as arguments, receiving a value takes the source and the expected Type %TODO
+Having these two programs specified as two seperate functions opposes several different problems. Lets say the protocol requirements change and the book buyer additionally sends an ISBN to the Title to better identify the book. If you just change the buyer program specification you end up in a deadlock, since the buyer wil block on the send of the ISBN and the seller will block on its send of the book price. Both parties arent able to progress further now. A even worse scenario might be if one participant for example changes the type of the Delivery date, lets say from String to Int. The buyer would expect the wrong datatype and interpret the received data false, leading to junk values that a user might not even notice.
+One Solution to this problem is to combine both programs into one. My libraray provides the Choreo ep monad which lets you combine the buyer and seller programs into one bookseller Choreography. Here you can execute local programs with the \emph{locally} function and suppliing the Location for the program to run on. Line 2 in TODO corresponds to line 2 in TODO. However the returned budget is not a normal Nat value anymore, it is Nat value that only lives on the buyer Location.%TODO
+Values can change Locations in one single operation instead of seperate send and receive calls. This operation in line 4 is written by the notation \emph{~>}. This translates to: send title from the location it lives on, namely the buyer, to the seller location. Line 5 shows a short notation for executing a local program and sending the result right away, the part before the @ is the local Program, he part after is the program location and part after the ~~> arrow is the receiving locaiton.

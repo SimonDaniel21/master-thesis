@@ -1,0 +1,32 @@
+\chapter{Examples}
+
+This Section presents four choreographic programs, to demonstrate how choreographies can be written in Lean using the chorlean library. The first example \ref{ss:silent} shows a very basic communication scheme. In the \ref{ss:book} example a already more complex protocol is presented to highlight higher Level Choreographies aswell as Location Polymorphism. \ref{ss:sso} Shows an application of a simple cryptographic protocol for a SSO service and the last example \ref{ss:merge} showcases a compute heavy application that balances compute load of a sorting algorithm across a set of  nodes.
+
+\subsection{silent post}
+\label{ss:silent}
+This first Distributed protocol is kept simple to demonstrate some of the features(TODO einen richtigen Satz formulieren).
+Three Participants, Alice, bob and eve take part in this protocol. The Scheme is that alice prompts an text input from the user, Then passes this input arround in a circle through bob and eve. Both bob and eve perfom local modifications of the message in the spirit of the silent post game.
+\input{chapters/examples/silentpost}
+As the Type of a Choreo depends on the endpoint it is projected to, the silent_post function carries an endpoint as a argument. Also notice the \emph{@} notation, that is an abbreviation for an \emph{GVal} Type with implicit endpoint. This notation works inside a Choreo as the endpoint of GVal's resulting from a communication or local operation is allways the endpoint the choreography is parameterized with.
+As discussed in --TODO-- the locally functions lets uns define a Freer-Monad with all locally available effects. For Silent post, those local Effect Signatures are defined as
+\begin{lstlisting}[language=lean]
+instance sig: LocSig Location where
+  sig x := match x with
+    | alice =>  CmdInputEff ⨳ LogEff
+    | bob =>  LogEff
+    | eve => LogEff
+\end{lstlisting}
+such that every location is allowed to perform a logging effect \emph{LogEff} and additionally alice has access to CmdInputEff, which allow to prompt a String from a User in the command line.
+
+
+\subsection{book seller}
+\label{ss:book}
+\input{chapters/examples/bookseller}
+
+\subsection{sso authentication}
+\label{ss:sso}
+\input{chapters/examples/sso}
+\subsection{mergesort}
+\label{ss:merge}
+
+\input{chapters/examples/mergesort}

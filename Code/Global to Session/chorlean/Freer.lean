@@ -4,7 +4,7 @@
 -- class EffectHandler (eff: Type u → Type v) (m: Type u → Type v) [Monad m] where
 --   run: eff α → m α
 
-inductive Freer (Eff:Type u → Type v) (α:Type w) where
+inductive Freer (Eff:Type u → Type v) (α:Type) where
 | Do: Eff β → (β → Freer Eff α) → Freer Eff α
 | Return: α → Freer Eff α
 
@@ -15,7 +15,7 @@ def Freer.lift  {m: Type → Type} [Monad m] [MonadLift eff m]: Freer eff α →
   Freer.lift (cont res)
 
 
-@[reducible] def Freer.toFreer {α: Type u} {Eff: Type u → Type v} (e: Eff α): Freer Eff α :=
+@[reducible] def Freer.toFreer {α: Type} {Eff: Type → Type v} (e: Eff α): Freer Eff α :=
   .Do e (fun x =>  .Return x)
 
 -- Lift instance that lifts an Effect into Freer tha only does this single effect
@@ -46,6 +46,7 @@ instance [MonadLiftT eff m] [Monad m]: MonadLiftT (Freer eff) m where
 -- product freer
 --def Freer.product (eff1)
 
+-- Coproduct
 inductive SumEff (eff1: Type u → Type v1) (eff2: Type u → Type v2) (α:Type u) where
 | eff1: eff1 α → SumEff eff1 eff2 α
 | eff2: eff2 α → SumEff eff1 eff2 α
@@ -85,6 +86,8 @@ inductive PrintEff: Type → Type
 | Print1: String → PrintEff Unit
 
 
+abbrev memPrinter := Freer (SumEff PrintEff (StateM String))
+
 
 inductive LogEff1: Type → Type 1
 | Print2: Nat → LogEff1 Unit
@@ -98,6 +101,10 @@ inductive LogEff2: Type → Type 1
 open PrintEff
 open LogEff1
 
+instance seee {s:Type} (v: s): MonadLiftT (StateM s) IO where
+  monadLift x :=do
+    return x.run' v
+
 instance: MonadLift PrintEff IO where
   monadLift x := match x with
     | .Print1 s => IO.println s
@@ -109,6 +116,21 @@ instance: MonadLift LogEff1 IO where
 instance: MonadLift LogEff2 IO where
   monadLift x := match x with
     | .Print3 s => IO.println ("n: " ++ toString s)
+
+def memprog: memPrinter Nat :=do
+  let temp <- get
+  set "XXX"
+  Print1 temp
+  Print1 "a"
+  return 3
+
+def memprog2: memPrinter Nat :=do
+  set "YYYY"
+  let temp <- get
+  Print1 temp
+  Print1 "a"
+  return 3
+
 
 def prog: Freer PrintEff Unit :=do
   Print1 "Hello"
@@ -130,7 +152,10 @@ def Main: IO Unit := do
   MonadLiftT.monadLift prog1
   prog1
   prog2
-  let temp <- (Print1 "e e e e")
+  let temp <- (Print1 "e e vvvve e")
+  have := seee "hello instanceee"
+  let temp <- memprog
+  let temp <- memprog2
   return ()
 
 #eval Main

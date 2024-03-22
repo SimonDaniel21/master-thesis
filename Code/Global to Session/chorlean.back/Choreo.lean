@@ -267,7 +267,7 @@ def cast_gv {owner ep:δ}  (gv: GVal owner ep α ) [k:∀ x, Coe (GVal owner ep 
 
 -- works similiar to normal coersion arrow ↑ but always casts to the underlying type
 --notation:55 "⤉" gv => (cast_gv gv)
-notation:55 "⤉" gv => Unpack.unpack gv
+notation:55 "⤉" gv => (Unpack.unpack gv)
 
 
 syntax "send " ident (" from " ident)? " to " term (" as " ident)?: doElem

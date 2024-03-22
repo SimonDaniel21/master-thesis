@@ -1,0 +1,5 @@
+\begin{lstlisting}[language=lean]
+inductive NetEff (ep: δ): Type -> Type 1
+| send {μ: Type} [Serialize μ] : (r:δ) -> (r ≠ ep) -> μ -> NetEff ep Unit
+| recv : (r:δ) -> (r ≠ ep) ->  (μ: Type) -> [Serialize μ] -> NetEff ep μ
+\end{lstlisting}

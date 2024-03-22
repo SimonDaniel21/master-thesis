@@ -17,7 +17,7 @@ variable {μ: Type} [Serialize μ]  -- mu wegen msg Type
 
 inductive NetEff (ep: δ): Type -> Type 1
 | send {μ: Type} [Serialize μ] : (r:δ) -> (r ≠ ep) -> μ -> NetEff ep Unit
-| recv : (r:δ) -> (r ≠ ep) ->  (μ: Type) -> [Serialize μ] -> NetEff ep μ
+| recv : (s:δ) -> (s ≠ ep) ->  (μ: Type) -> [Serialize μ] -> NetEff ep μ
 
 -- Interpretation of the NetEffOld Signature in the IO Monad using Sockets
 -- instance: MonadLift (NetEff) IO where
@@ -86,17 +86,21 @@ def init_network [DecidableEq δ] [Repr δ] [FinEnum δ] (ep: δ) (as:  (k:δ×�
 instance NetEPP [FinEnum δ] [Repr δ] (ep: δ) (net: SockNet ep): MonadLiftT (NetEff ep) IO where
   monadLift x := match x with
   | NetEff.send r p m=> do
-    let c := net.getChannel ⟨ ep, r⟩ (by sorry)  -- very simple proof
+
+    let c := net.getChannel ⟨ ep, r⟩ (fun x => p (Eq.symm x))
 
     let sock := c.send_sock.unwrap (by simp)
-    IO.println s!"{reprName ep} --> {reprName r} --> {Serialize.pretty m}"
+    if dbg_print_net_msgs then
+      IO.println s!"{reprName ep} --> {reprName r} --> {Serialize.pretty m}"
     sock.send_val2 m
 
   | NetEff.recv s p μ => do
-    let c := net.getChannel ⟨s, ep⟩ (by sorry)
+    let c := net.getChannel ⟨s, ep⟩ p
     let sock := c.recv_sock.unwrap (by simp)
+
     let res <- sock.recv_val2
-    IO.println s!"{reprName ep} <-- {reprName s} <-- {Serialize.pretty res}"
+    if dbg_print_net_msgs then
+      IO.println s!"{reprName ep} <-- {reprName s} <-- {Serialize.pretty res}"
     return res
 
 
@@ -104,12 +108,17 @@ instance NetEPP [FinEnum δ] [Repr δ] (ep: δ) (net: SockNet ep): MonadLiftT (N
 
 
 
+class LocSig (δ:Type) where
+  sig: δ -> (Type -> Type 1)
+  executable: ∀ (l:δ), MonadLiftT (sig l) IO
+
+
 -- auxiliary Effect, sum type of either a net_eff or local_eff
 
-@[reducible] def LocalProgramEff {δ:Type} (ep:δ) (leff:Type -> Type 1) := SumEff (NetEff ep) leff
+@[reducible] def LocalProgramEff {δ:Type} (ep:δ) [sig:LocSig δ]:= SumEff (NetEff ep) (sig.sig ep)
 
 -- A Monad for Local Effects where leff is the Effect Signature
-@[reducible] def LocalM {δ:Type} (ep:δ) (leff: Type -> Type 1) := Freer (LocalProgramEff ep leff)
+@[reducible] def LocalM {δ:Type} (ep:δ) [LocSig δ] := Freer (LocalProgramEff ep)
 
 def IOe (a:Type) := IO a
 

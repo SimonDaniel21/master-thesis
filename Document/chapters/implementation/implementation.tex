@@ -1,0 +1,96 @@
+\chapter{Implementation}
+\label{ch:implementation}
+
+this chapter presents the Lean Code of my library implementation in detail. It also compares it to different implementations and discusses the design choices being made.
+\par
+throughout the code im using the following variables for the respective context.
+here is a table of symbols and how i use them in this chapters code
+
+$\mu$ : Type that can be transfered over the network, has an Serialize instance
+$\delta$: Choreos are parameterized by the Type of locations called $\delta$
+$\alpha$,$\beta$: Types
+ep: short for 'endpoint'. This is a value of type $\delta$ that represents the location a local program is meant to be run on
+
+Lean allows you to specify \"variables\", not to be confused with global variables as in global state from other PLs.
+\input{chapters/implementation/variables}
+Here, even though $\mu$ does not provide a Serialize instance explictely but it is implicetely inserted through the variable statement. This allows to omit the Serialize instances in my implementation code.
+%\section{Prgram Syntax}
+%
+% Choreo (Multiparty Program) P -> if E then P else P endif P
+% \newline| send_receive 		:v@l <= v@l2
+% \newline| compute      		: v@l <= E@l
+% \newline| choreo 			: v@l <= CHOREO with mapping P END_CHOREO P
+% \newline| end 				: v@l
+%
+% Expression E -> Variable: v
+% \newline| CONSTANT : c
+% \newline| PLUS     : (E+E)
+% \newline| DIVIDE   : (E/E)
+% \newline| Function -> f(E)
+%
+% v sind Variablennamen (Strings) und l Location Namen (Strings)
+%
+% \begin{grammar}
+% <Choreo> ::= <ident> ‘=’ <expr>
+% \alt ‘for’ <ident> ‘=’ <expr> ‘to’ <expr> ‘do’ <statement>
+% \alt ‘{’ <stat-list> ‘}’
+% \alt <empty>
+% <stat-list> ::= <statement> ‘;’ <stat-list> | <statement>
+% \end{grammar}
+%
+%
+% \begin{grammar}
+% <Choreo> ::= <ident> ‘=’ <expr>
+% \alt ‘for’ <ident> ‘=’ <expr> ‘to’ <expr> ‘do’ <statement>
+% \alt ‘{’ <stat-list> ‘}’
+% \alt <empty>
+% <stat-list> ::= <statement> ‘;’ <stat-list> | <statement>
+% \end{grammar}
+
+\section{Networking in Lean4}
+Lean4's standard Library provides IO operations for exchanging values between multiple Threads. While this would suffice to test the functionality of running Choreographies on a single machine, it is much more desirable to be able to split the Choreography into actual seperate programs that may run on different machines. To accomplish this I decided to implement message exchanging by Sockets.
+While some PLs like Java provide a Language embedded implementation of Sockets, or other well established Languages like Haskell provide mature Librarays for a Socket API, Lean has a much younger ecosystem that seems less feature rich. The Solution i chose is the relatively new Lean4 library 'sockets for Lean 4' by Henrik Böving (TODO in Quellen reinpacken) which is hosted at https://github.com/hargoniX/socket.lean under the MIT License. It servers as a wrapper around the platform specific 'winsock.h' Windows, and the 'sys/socket.h' Unix C-librarys while providing a native Lean interface. At the time of working on this thesis the \emph{Sockets} did not work with the, at that time, newest Version of Lean 4.6.0. Thanks to them they updated an underlying library (https://github.com/tydeu/lean4-alloy) and accepted my Merge Request with the version bump \cite{test}.
+\par
+To abstract away the Socket setup code in my local programs i decided to reopen a new socket for every communication operation in the Choreography for simplicity
+
+\input{chapters/implementation/netsend}
+
+similiarly to the sock.connect operation, the 'receive' function will bind an listen to a socket with the corresponding addres. For convenience a 'broadcast' function is also available, that takes an 'List address' instead of a single address and sends msg to all addresses in the List.
+\newline
+Serialize is a simple TypeClass that provides the following two functions:
+\input{chapters/implementation/serialize}
+By implementing the Serialize class, a Type can converted to, and from a ByteArray, enabling it to be sent over the network. Note that from_bytes is a partial function that may not return a conversion of that type. Not every ByteArray must be convertible into a type. A ByteArray created by the to_bytes function however should always be able to convert back into the initial value by the from_bytes function. Lean lets you add this condition as an additional class Field like
+\input{chapters/implementation/serializecorrectness}
+(with an addtional assumption that from_bytes is no Exception). I omitted this proof in my implementation since writing such rigorous proofs for Serialize instances like Lists would be out of scope of this thesis, as im not trying to implement a perfect Serialization Framework for Lean.
+
+\subsection{Network Effects}
+\input{chapters/implementation/neteff}
+
+\subsection{Persitant Connections}
+
+\input{chapters/implementation/channel}
+
+\section{Locations}
+
+explain the chosen Type for location and why it differs from HasChor, pros cons
+
+\section{Distributed Values}
+When computing with values in a global choreographic description it is crucial to differtiate between ``normal'' and distributed values. Since the choreography projects to different executable programs, distributed values can only live at a single location at a time. The authors of HasChor used Language extensions to integrate the location of a value into the type system. This is important to statically distinguish between a Value that lives on a location l1 and a value on l2 where l1 != l2.
+Lean's dependent Typesystem however provides more flexibility and lets express the same dependent type without any language extensions or third party librarys like follows:
+
+\input{chapters/implementation/gval}
+Here \emph{LocVal.Wrap} elements are representing Values at the Location \emph{loc} where LocVal simply holds a Value of a given type \emph{ alpha }.
+The \emph{Empty} Option represents the abscence of an actual \emph{alpha} Value for all locations other than \emph{loc}. This is important in the endpoint projection process. We present two functions to go from and to a LocVal from a given Value of any Type alpha:
+
+\input{chapters/implementation/wrap}
+
+\section{Effects and Free Monads}
+In this section i will describe the effect System that i implemented in Lean
+\input{chapters/implementation/freer}
+\begin{lstlisting}[language=lean]
+inductive EmptyEff: Type → Type 1
+\end{lstlisting}
+
+\begin{lstlisting}[language=lean]
+\end{lstlisting}
+

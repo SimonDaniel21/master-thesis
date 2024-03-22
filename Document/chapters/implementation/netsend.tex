@@ -1,0 +1,8 @@
+\begin{lstlisting}[language=lean]
+def address.send (a: address) (msg: t) [Serialize t]: IO Unit := do
+  let bytes := Serialize.to_bytes msg
+  let sock ← Socket.mk .inet .stream
+  sock.connect a
+  let sz ← sock.send bytes
+  sock.close
+\end{lstlisting}

@@ -34,7 +34,7 @@
 %%
 
 \documentclass[
-	ngerman,
+	english,
 	ruledheaders=section,%Ebene bis zu der die Überschriften mit Linien abgetrennt werden, vgl. DEMO-TUDaPub
 	class=report,% Basisdokumentenklasse. Wählt die Korrespondierende KOMA-Script Klasse
 	thesis={type=master},% Dokumententyp Thesis, für Dissertationen siehe die Demo-Datei DEMO-TUDaPhd
@@ -48,9 +48,12 @@
 ]{tudapub}
 
 % MEINE PACKETE
+\usepackage[most]{tcolorbox}
 
-% to print fixure XYZ instead of fig. XYZ
-\usepackage{cleveref}
+\usepackage{fdsymbol}       % Contains a symbol for ⌀ -- use \diameter
+\usepackage{newunicodechar} % To write the definition on the next line
+\newunicodechar{⤉}{\ensuremath{\Uparrow}}
+\newunicodechar{⨳}{\ensuremath{\texttimes}}
 
 \usepackage{syntax}
 \renewcommand{\syntleft}{}
@@ -87,7 +90,7 @@
 %Literaturverzeichnis
 %%%%%%%%%%%%%%%%%%%
 \usepackage{biblatex}   % Literaturverzeichnis
-\bibliography{literature.bib}
+\bibliography{literature}
 %\addbibresource{literature}% Dateiname der .bib-dat
 
 %%%%%%%%%%%%%%%%%%%
@@ -116,6 +119,12 @@
 \usepackage{pifont}% Zapf-Dingbats Symbole
 \newcommand*{\FeatureTrue}{\ding{52}}
 \newcommand*{\FeatureFalse}{\ding{56}}
+
+
+% to print fixure XYZ instead of fig. XYZ
+\usepackage{hyperref}
+\usepackage{cleveref}
+
 
 \begin{document}
 
@@ -160,13 +169,13 @@
 %\affidavit[signature-image={\includegraphics[width=\width,height=1cm]{example-image}}, <hier können andere Optionen zusätzlich stehen>]
 
 \tableofcontents
-\cite{adaptive_omp}
-\input{chapters/abstract}
-\input{chapters/introduction}
-\input{chapters/background}
-\input{chapters/Implementation}
-\input{chapters/evaluation}
-\input{chapters/conclusion}
+\input{chapters/abstract/abstract}
+\input{chapters/introduction/introduction}
+\input{chapters/background/background}
+\input{chapters/implementation/implementation}
+\input{chapters/examples/examples}
+\input{chapters/evaluation/evaluation}
+\input{chapters/conclusion/conclusion}
 \printbibliography
 
 \end{document}

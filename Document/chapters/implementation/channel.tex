@@ -1,0 +1,5 @@
+\begin{lstlisting}[language=lean]
+structure SockChannel (sender receiver ep: δ) where
+  recv_sock: GVal receiver ep Socket
+  send_sock: GVal sender ep Socket
+\end{lstlisting}

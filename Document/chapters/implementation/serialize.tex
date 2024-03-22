@@ -1,0 +1,5 @@
+\begin{lstlisting}[language=lean]
+class Serialize (μ: Type) μ where
+  to_bytes: μ -> ByteArray
+  from_bytes: ByteArray -> Except String μ
+\end{lstlisting}

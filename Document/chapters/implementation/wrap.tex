@@ -1,0 +1,6 @@
+\begin{lstlisting}[language=lean]
+inductive LocVal (α: Type) (loc: String) where
+| Wrap: α -> LocVal α loc
+| Empty: LocVal α loc
+\end{lstlisting}
+

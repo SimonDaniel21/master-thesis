@@ -33,10 +33,17 @@ instance {loc ep: δ} [ToString μ]: ToString (GVal loc ep μ) where
     else
       "Empty"
 
-@[reducible] def LVal {ep:δ} (owner: δ) (α:Type) := GVal owner ep α
+@[reducible] def LVal {ep:δ} (α:Type) (owner: δ)  := GVal owner ep α
 
 class Unpack (loc ep: δ) (α : Type) where
   unpack : GVal loc ep α → α
 
 notation:55 α " @ " owner " # " ep  => GVal owner ep α
+
+variable (ep: δ)
+
 notation:55 α "@" owner =>  LVal owner α
+
+abbrev tempp (owner: δ) (α:Type) := GVal owner ep α
+
+notation:55 α "@@" owner =>  tempp α owner

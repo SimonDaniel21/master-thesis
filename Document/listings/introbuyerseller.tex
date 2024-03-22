@@ -1,0 +1,46 @@
+\textbf{Choreography:}
+\begin{lstlisting}[label={lst:buyer_seller_chor},language=lean]
+def book_seller (ep: Location): Choreo ep (Option (String @ buyer#ep)):= do
+
+  let budget <- locally buyer get_budget
+  let title <- locally buyer get_title
+  let title' <- title ~> seller
+  let price <- (lookup_price (⤉ title')) @ seller ~~> buyer
+  let choice: Bool @ buyer <- locally buyer do return ((⤉budget) >= (⤉price))
+
+  branch d fun
+  | true => do
+    let date <- deliveryDate @ seller ~~> buyer
+    return some date
+  | false => do
+     return none
+\end{lstlisting}
+\noindent
+\begin{minipage}{.5\textwidth}
+\textbf{Buyer:}
+
+\begin{lstlisting}[label={lst:buyer_ep}, language=lean, basicstyle=\small]
+def buyer: LocalM buyer (Option (String)):= do
+  let budget <- get_budget
+  let title <- get_title
+  send buyer seller title
+  let price <- recv buyer seller Nat
+  if budget >= price then
+    let date <- recv buyer seller String
+    return some date
+  else
+    return none
+\end{lstlisting}
+\end{minipage}
+\begin{minipage}{.5\textwidth}
+\textbf{Seller:}
+\begin{lstlisting}[label={lst:seller_ep},language=lean, basicstyle=\small]
+def seller: LocalM seller Unit:= do
+  let title' <- recv seller buyer String
+  let price <- (lookup_price  title')
+  let choice <- recv seller buyer Bool
+  if choice then
+    let date <- deliveryDate
+    send seller buyer date
+\end{lstlisting}
+\end{minipage}

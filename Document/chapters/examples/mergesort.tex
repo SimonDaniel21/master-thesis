@@ -1,0 +1,15 @@
+\begin{lstlisting}[language=lean]
+def silent_post (ep:Location): Choreo ep Unit:= do
+  let input <- locally alice do
+    info "enter a message"
+    return <- readString
+
+  let msg: String @ bob <- input ~> bob
+  let msg <- locally bob do return [(⤉msg), "bob"]
+
+  let msg <- msg ~> eve
+  let msg <- locally eve do return (⤉msg).concat "eve"
+
+  let msg <- send_recv msg alice
+  locally alice do info s!"finished with string from eve: {msg}"
+\end{lstlisting}

@@ -70,8 +70,8 @@ lean_exe silent_post2 where
   supportInterpreter := true
 
 
-lean_exe bookseller where
-  root := `chorlean.examples.bookseller
+lean_exe bookseller1 where
+  root := `chorlean.examples.bookseller1
   moreLeancArgs := #["-fPIC"]
   supportInterpreter := true
 
@@ -101,12 +101,18 @@ lean_exe auth2 where
   supportInterpreter := true
 
 lean_exe merge where
-  root := `chorlean.examples.mergesort
+  root := `chorlean.examples.mergesort2
   moreLeancArgs := #["-fPIC"]
   supportInterpreter := true
 
 lean_exe play where
   root := `Meeting_12_02.playground6
+  moreLeancArgs := #["-fPIC"]
+  supportInterpreter := true
+
+
+lean_exe vector where
+  root := `chorlean.examples.vectorOperation
   moreLeancArgs := #["-fPIC"]
   supportInterpreter := true
 

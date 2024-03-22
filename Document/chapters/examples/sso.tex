@@ -1,0 +1,27 @@
+\begin{lstlisting}[language=lean]
+structure Credentials where
+  username: String
+  password: String
+
+def authenticate (ep:Location) (creds: Credentials @ client # ep):
+  Choreo ep (Option ((String @ client # ep) × (String @ service # ep))):= do
+
+  let pw <- locally client do return (⤉creds).password
+  locally service do info "hello service"
+  let username <- locally client do return (⤉creds).username
+  let username' <- username ~> IP
+  let salt <- locally IP do return add_salt (⤉username')
+  let salt <- salt ~> client
+  let hash <- locally client do return (calcHash (⤉salt) (⤉pw))
+  let hash <- hash ~> IP
+  let valid <- locally IP do check_hash (⤉hash)
+
+  branch valid fun
+  | true => do
+    let token <- locally IP do IPEff.createToken
+    let token_c <- token ~> client
+    let token_s <- token ~> service
+    return (token_c, token_s)
+  | false =>
+    return none
+\end{lstlisting}

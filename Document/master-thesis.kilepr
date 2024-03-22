@@ -18,37 +18,55 @@ src_extensions=.tex .ltx .latex .dtx .ins
 MakeIndex=
 QuickBuild=
 
-[item:chapters/Implementation.tex]
+[item:chapters/background/background.tex]
 archive=true
 encoding=UTF-8
 highlight=LaTeX
 mode=LaTeX
 
-[item:chapters/abstract.tex]
+[item:chapters/examples/bookseller.tex]
 archive=true
 encoding=UTF-8
 highlight=LaTeX
 mode=LaTeX
 
-[item:chapters/background.tex]
+[item:chapters/examples/examples.tex]
 archive=true
 encoding=UTF-8
 highlight=LaTeX
 mode=LaTeX
 
-[item:chapters/conclusion.tex]
+[item:chapters/examples/mergesort.tex]
 archive=true
 encoding=UTF-8
 highlight=LaTeX
 mode=LaTeX
 
-[item:chapters/evaluation.tex]
+[item:chapters/examples/silentpost.tex]
 archive=true
 encoding=UTF-8
 highlight=LaTeX
 mode=LaTeX
 
-[item:chapters/introduction.tex]
+[item:chapters/examples/sso.tex]
+archive=true
+encoding=UTF-8
+highlight=LaTeX
+mode=LaTeX
+
+[item:chapters/implementation/implementation.tex]
+archive=true
+encoding=UTF-8
+highlight=LaTeX
+mode=LaTeX
+
+[item:chapters/introduction/buyerseller.tex]
+archive=true
+encoding=UTF-8
+highlight=LaTeX
+mode=LaTeX
+
+[item:chapters/introduction/introduction.tex]
 archive=true
 encoding=UTF-8
 highlight=LaTeX
