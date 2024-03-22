@@ -56,10 +56,10 @@ To abstract away the Socket setup code in my local programs i decided to reopen 
 \input{chapters/implementation/netsend}
 
 similiarly to the sock.connect operation, the 'receive' function will bind an listen to a socket with the corresponding addres. For convenience a 'broadcast' function is also available, that takes an 'List address' instead of a single address and sends msg to all addresses in the List.
-\newline
+
 Serialize is a simple TypeClass that provides the following two functions:
 \input{chapters/implementation/serialize}
-By implementing the Serialize class, a Type can converted to, and from a ByteArray, enabling it to be sent over the network. Note that from_bytes is a partial function that may not return a conversion of that type. Not every ByteArray must be convertible into a type. A ByteArray created by the to_bytes function however should always be able to convert back into the initial value by the from_bytes function. Lean lets you add this condition as an additional class Field like
+By implementing the Serialize class, a Type can converted to, and from a ByteArray, enabling it to be sent over the network. Note that \lstinline!to_bytes! is a partial function that may not return a conversion of that type. Not every ByteArray must be convertible into a type. A ByteArray created by the to_bytes function however should always be able to convert back into the initial value by the from_bytes function. Lean lets you add this condition as an additional class Field like
 \input{chapters/implementation/serializecorrectness}
 (with an addtional assumption that from_bytes is no Exception). I omitted this proof in my implementation since writing such rigorous proofs for Serialize instances like Lists would be out of scope of this thesis, as im not trying to implement a perfect Serialization Framework for Lean.
 
