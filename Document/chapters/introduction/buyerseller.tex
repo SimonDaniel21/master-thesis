@@ -1,5 +1,5 @@
 \textbf{Choreography:}
-\begin{lstlisting}[label={lst:buyer_seller_chor},language=lean]
+\begin{lstlisting}[label={lst:buyer-seller-chor},language=lean]
 def book_seller (ep: Location): Choreo ep (Option (String @ buyer#ep)):= do
 
   let budget <- locally buyer get_budget
@@ -19,7 +19,7 @@ def book_seller (ep: Location): Choreo ep (Option (String @ buyer#ep)):= do
 \begin{minipage}{.5\textwidth}
 \textbf{Buyer:}
 
-\begin{lstlisting}[label={lst:buyer_ep}, language=lean, basicstyle=\small]
+\begin{lstlisting}[label={lst:buyer-ep}, language=lean, basicstyle=\small]
 def buyer: LocalM buyer (Option (String)):= do
   let budget <- get_budget
   let title <- get_title
@@ -34,7 +34,7 @@ def buyer: LocalM buyer (Option (String)):= do
 \end{minipage}
 \begin{minipage}{.5\textwidth}
 \textbf{Seller:}
-\begin{lstlisting}[label={lst:seller_ep},language=lean, basicstyle=\small]
+\begin{lstlisting}[label={lst:seller-ep},language=lean, basicstyle=\small]
 def seller: LocalM seller Unit:= do
   let title' <- recv buyer String
   let price <- (lookup_price  title')
