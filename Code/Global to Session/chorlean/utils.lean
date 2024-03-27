@@ -93,6 +93,22 @@ def res3 := res.push 3
 
 #eval #[1,2,3,4,5,6].toSubarray 2 3
 
+#check ByteArray
+def Option.to_bytes [Serialize α]: to_bytes_t (Option α) := fun x => match x with
+  | some v =>   [(1:UInt8)].toByteArray ++ (Serialize.to_bytes v)
+  | none => [(0:UInt8)].toByteArray
+
+def Option.from_bytes [Serialize μ]: from_bytes_t (Option μ) := fun bs => do
+  let uint8_opt := bs.data.get? 0
+  match uint8_opt with
+  | some v => match v with
+    | 1 =>
+      let r <- (Serialize.from_bytes (μ:=μ) (bs.extract 1 bs.size))
+      return Option.some r
+    | _ => return Option.none
+  | none => throw "received unconvertable Option"
+
+
 def UInt8.to_bytes: to_bytes_t UInt8 := fun x =>
   (ByteArray.mkEmpty 1).push x
 
@@ -293,6 +309,11 @@ instance: Serialize String where
   to_bytes := String.to_bytes
   type_name := "String"
 
+instance {μ} [Serialize μ]: Serialize (Option μ) where
+  from_bytes := Option.from_bytes
+  to_bytes := Option.to_bytes
+  type_name := "String"
+
 instance (a:Type) [Serialize a]: Serialize (List a) where
   from_bytes := List.from_bytes
   to_bytes := List.to_bytes
@@ -305,7 +326,6 @@ def empty_nats: List Nat:= []
 def test_bytes := ["hellö", "world","shrt", "longer text"].to_bytes
 
 def test_bytes2:= empty_nats.to_bytes
-
 
 abbrev Address := Socket.SockAddr4
 
