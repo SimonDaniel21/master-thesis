@@ -77,20 +77,25 @@ explain the chosen Type for location and why it differs from HasChor, pros cons
 \section{Distributed Values}
 When computing with values in a global choreographic description it is crucial to differtiate between ``normal'' and distributed values. Since the choreography projects to different executable programs, distributed values can only live at a single location at a time. The authors of HasChor used Language extensions to integrate the location of a value into the type system. This is important to statically distinguish between a Value that lives on a location l1 and a value on l2 where l1 != l2.
 Lean's dependent Typesystem however provides more flexibility and lets express the same dependent type without any language extensions or third party librarys like follows:
-
+\input{chapters/implementation/gval-haschor}
 \input{chapters/implementation/gval}
 Here \emph{LocVal.Wrap} elements are representing Values at the Location \emph{loc} where LocVal simply holds a Value of a given type \emph{ alpha }.
 The \emph{Empty} Option represents the abscence of an actual \emph{alpha} Value for all locations other than \emph{loc}. This is important in the endpoint projection process. We present two functions to go from and to a LocVal from a given Value of any Type alpha:
 
 \input{chapters/implementation/wrap}
 
-\section{Effects and Free Monads}
-In this section i will describe the effect System that i implemented in Lean
+\section{Coproducts and Free Monads}
+Lean4 is a functional programming Language by nature, but we can still write effectful programs. Like in Haskell and other functional programming languages this is done with Monads. The special Monad Type that lets us run effects is called \emph{IO}. IO allows the program to effect the world outside the pure function, by for example printing text to the terminal, generating random numbers, writing files, spawning processes and many more. This broad variety of basically any possible effects in a IO program makes it harder to argue about about the programs.
+IO is therefore called a 'sin bin' \cite{datatypes-a-la-carte} of effects. Ecspecially in the realm of distributed programs and web there is a even bigger appeal to be able to concisely state the effect capabilities of a program. Usally there are 2 or more roles involved with different IO requirements. For example a web application where the user needs to run some kind of user interface locallay, and webserver wich accesses a sql database to feed data to the user.
+Neither the user has any buisness to manipulate a database, nor has the server any buisness to graphically display a UI. To make this seperation of concerns explicit in code I made use of the concept of Free Monads \cite{datatypes-a-la-carte}
+In this section i will describe Free Monads and coproducts, my implementation in Lean and show how they can be used
 \input{chapters/implementation/freer}
-\begin{lstlisting}[language=lean]
-inductive EmptyEff: Type → Type 1
-\end{lstlisting}
+This inductive Type \emph{Freer} is parameterized by \emph{Eff} which is a function that takes a type and returns a type. \emph{Eff} is short for 'effect' and determines the type of a effects the freer monad can capture. There are two possible Values of Freer: either a pure value (Return, l.3) of the parameterized type $\alpha$ or an inpure Effect followed by a continuation of this effect (DO, l.2).
+\lstinline!Type u -> Type v! is the type of all monads.
+To give an better intuition about Freer, lets look at \lstinline!Freer IO! for example. As IO is a monad it also has the correct type. \lstinline!Freer.Do! now has a very intuitive meaning of: a program that produces a value of type beta and a continuation that depends on such a result beta.
+Freer itself has also Monad instance that also is quite straight forward.
+\input{chapters/implementation/freer-monad}
+To wrap an pure value into the Freer Monad \lstinline!Freer.Return! is used. The bind works by appliing the continuation to the pure value of a \lstinline!Freer.Return!, or recursively %TODO nachdenken
+you can think of it as a sequence.
 
-\begin{lstlisting}[language=lean]
-\end{lstlisting}
-
+The Freer Monad is only an abstract sequence of effects as an algebraic structure, but we also want to execute this as IO programs for example. To achieve this you normaly define 'run' or 'interpretation' functions that interpret the Freer monad in terms of another monad. Lean already provides for this sort of 'interpretation as a monad' a technique called MonadLifting. This can automatically interpret Monads (or just Type -> Type without a Monad instance) as an other monad and you do not need to be explicit about it.

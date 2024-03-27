@@ -36,7 +36,7 @@ In \cref{ch:evaluation} i talk about how well Choreographies integrate into the 
 
 \input{chapters/introduction/buyerseller}
 
-Here you can see the same behaviour implemented in two different ways. \cref{lst:test} shows the combined program specification, \cref{ch:evaluation} and \cref{ch:evaluation} show the individual program for the specified endpoints.
+Here you can see the same behaviour implemented in two different ways. \cref{lst:buyer-seller-chor} shows the combined program specification, \cref{ch:evaluation} and \cref{ch:evaluation} show the individual program for the specified endpoints.
 \par
 The protocol includes two participants. A buyer who wants to order a book and a bookseller. To make the decision wether the \emph{buyer} can afford the Book, he first sends it's title to the \emph{seller}. The \emph{seller} is able to lookup the Books price in his local Database by the title and commuinicates the value back to the \emph{buyer}. Next The buyer checks if his budget fits the book price. If it does he requests the book from the Seller who finally notifies the buyer about the delivery date which terminates the protocol. If the book is to expensive the protocol terminates right away with a None Option.
 This is a common Scenario to introduce Choreographys, for example \cite{pirouette} uses it, and \cite{gentle-introduction-multiparty-sessiontypes} uses the same protocol with different names.

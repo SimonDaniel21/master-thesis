@@ -1,4 +1,4 @@
-\begin{lstlisting}[language=lean]
+\begin{lstlisting}[language=lean, numbers=left]
 inductive Freer (Eff:Type u -> Type v) (α:Type u) where
 | Do: Eff β -> (β -> Freer Eff α) -> Freer Eff α
 | Return: α -> Freer Eff α

@@ -1,5 +1,5 @@
 \begin{lstlisting}[language=lean]
-inductive LocVal (α: Type) (loc: String) where
-| Wrap: α -> LocVal α loc
-| Empty: LocVal α loc
+inductive GVal (owner ep: δ) (α: Type) where
+| Wrap:  (owner = ep) -> α -> GVal owner ep α
+| Empty: (owner ≠ ep) -> GVal owner ep α
 \end{lstlisting}

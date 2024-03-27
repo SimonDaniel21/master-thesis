@@ -1,5 +1,5 @@
 \textbf{Choreography:}
-\begin{lstlisting}[label={lst:buyer-seller-chor},language=lean]
+\begin{lstlisting}[label={lst:buyer-seller-chor}, caption={Choreography}, language=lean, basicstyle=\tiny]
 def book_seller (ep: Location): Choreo ep (Option (String @ buyer#ep)):= do
 
   let budget <- locally buyer get_budget
@@ -19,13 +19,14 @@ def book_seller (ep: Location): Choreo ep (Option (String @ buyer#ep)):= do
 \begin{minipage}{.5\textwidth}
 \textbf{Buyer:}
 
-\begin{lstlisting}[label={lst:buyer-ep}, language=lean, basicstyle=\small]
+\begin{lstlisting}[label={lst:buyer-ep}, caption={Buyer}, language=lean, basicstyle=\tiny]
 def buyer: LocalM buyer (Option (String)):= do
-  let budget <- get_budget
-  let title <- get_title
   send seller title
+
   let price <- recv seller Nat
-  if budget >= price then
+  let choice := (budget >= price)
+  send seller choice
+  if choice then
     let date <- recv seller String
     return some date
   else
@@ -34,7 +35,7 @@ def buyer: LocalM buyer (Option (String)):= do
 \end{minipage}
 \begin{minipage}{.5\textwidth}
 \textbf{Seller:}
-\begin{lstlisting}[label={lst:seller-ep},language=lean, basicstyle=\small]
+\begin{lstlisting}[label={lst:seller-ep}, caption={Buyer},language=lean, basicstyle=\small]
 def seller: LocalM seller Unit:= do
   let title' <- recv buyer String
   let price <- (lookup_price  title')

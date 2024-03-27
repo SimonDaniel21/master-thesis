@@ -1,0 +1,5 @@
+\begin{lstlisting}[language=lean]
+inductive GVal (owner: δ) (α: Type) where
+| Wrap: α -> GVal α owner
+| Empty: GVal α owner
+\end{lstlisting}

@@ -6,14 +6,9 @@ def book_seller (negotiate: negT buyer ep)
   let title <- locally buyer do get_title
 
   let title' <- (title ~> seller)
-  let price <- locally seller do lookup_price (⤉title')
+  let price <- locally seller do lookup_price (⇑title')
   let price <- price ~> buyer
-
-  locally seller do info s!"got book title: {⤉title'}"
-
-  locally buyer do info s!"the price is {⤉price}, negotiate with friend"
-
-  let d <- negotiate budget price -- calls another choreo :)
+  let d <- negotiate budget price
 
   branch d fun
   | true => do
@@ -22,7 +17,7 @@ def book_seller (negotiate: negT buyer ep)
     return some date
   | false => do
     locally seller do warning s!"the customer declined the purchase"
-    locally buyer do error s!"{⤉title} has a price of {⤉price} exceeding your budget of {⤉budget}!"
+    locally buyer do error s!"{⇑title} has a price of {⇑price} exceeding your budget of {⇑budget}!"
     return none
 
 \end{lstlisting}

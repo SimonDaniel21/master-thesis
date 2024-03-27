@@ -1,0 +1,11 @@
+\begin{lstlisting}[language=lean, numbers=left]
+def Freer.bind {α β : Type} : Freer Eff α → (α → Freer Eff β) → Freer Eff β
+| Return v, next => next v
+| Do eff cont, next =>
+  Freer.Do eff (fun  x => bind (cont x) next)
+
+instance: Monad (Freer Eff) where
+  pure x := .Return x
+  bind := Freer.bind
+\end{lstlisting}
+    
