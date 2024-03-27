@@ -110,6 +110,12 @@ lean_exe play where
   moreLeancArgs := #["-fPIC"]
   supportInterpreter := true
 
+lean_exe kvs where
+  root := `chorlean.examples.kvs
+  moreLeancArgs := #["-fPIC"]
+  supportInterpreter := true
+
+
 
 lean_exe vector where
   root := `chorlean.examples.vectorOperation
